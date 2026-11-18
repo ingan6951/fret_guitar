@@ -166,6 +166,27 @@ QUALITIES.forEach(q=>{
   eq(barres([null,null,mk(4,5,1),mk(3,7,3),mk(2,5,1),null]),[{fret:5,top:2,bottom:4}],'더 높은 프렛 위로 이어지는 바레');
 }
 
+// 4-2) 새 코드 종류: 모든 코드는 모든 구성음으로 폼이 있고, 폼 이름·도수는 코드별 이름을 쓴다
+{
+  const {degreeOf}=L;
+  for(const q of QUALITIES){
+    const all=[0,1,2,3].map(i=>i<q.tones.length);
+    if(!hasForms(q.id,'all',all,'adj')) fails.push(`${q.id}: 모든 구성음 폼 없음`);
+    eq(q.deg.length,q.tones.length,`${q.id}: 도수 이름 수`);
+    eq(new Set(q.tones).size,q.tones.length,`${q.id}: 구성음 중복`);
+    collect(0,q.id,'all',false,all,'adj').forEach(r=>r.formName.split('–').forEach(d=>{ if(!q.deg.includes(d)) fails.push(`${q.id}: 폼 이름 ${r.formName}`); }));
+  }
+  const add9=QUALITIES.find(q=>q.id==='add9'),dim7=QUALITIES.find(q=>q.id==='dim7'),aug=QUALITIES.find(q=>q.id==='aug');
+  eq([degreeOf(add9,2),degreeOf(add9,14),degreeOf(add9,4),degreeOf(add9,5)],['9','9','3',''],'add9 도수');
+  eq(degreeOf(dim7,9),'𝄫7','dim7 도수');
+  eq(degreeOf(aug,8),'♯5','aug 도수');
+  // Csus4 폼은 모두 C·F·G로만 이루어진다
+  collect(0,'sus4',5,false,[true,true,true,false],'adj').forEach(r=>{
+    const pcs=r.notes.filter(Boolean).map(n=>n.pc).sort((a,b)=>a-b);
+    eq(pcs,[0,5,7],'Csus4 음: C F G');
+  });
+}
+
 // 5) 바레 계산이 모든 결과에서 깨지지 않는다
 for(const q of QUALITIES){
   for(const t of masks){

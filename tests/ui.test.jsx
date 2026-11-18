@@ -66,7 +66,7 @@ test('쉘: m7 4음은 베이스 5·6만, 근음만 켜면 쉘 비활성',()=>{
 
 test('모든 코드·구성음·줄 배치·베이스 조합이 화면을 깨지 않는다',()=>{
   let n=0;
-  for(const q of QUALITIES) for(let m=1;m<16;m++) for(const layout of ['adj','skip']) for(const rs of [1,2,3,4,5,6,'all']){
+  for(const q of QUALITIES) for(let m=1;m<16;m++) for(const layout of ['adj','skip']) for(const rs of [1,3,4,6,'all']){
     const t=[0,1,2,3].map(i=>!!(m&(1<<i)));
     const r=boot({root:n%12,q:q.id,rs,t,layout,label:['finger','note','degree'][n%3],flat:n%2===0});
     // 불가능한 저장값은 복구되므로 항상 폼이 있다

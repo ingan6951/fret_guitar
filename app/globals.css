@@ -72,6 +72,8 @@ h1,h2,p{margin:0}
 .seg.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .seg.row4 .chip{min-width:0;flex-direction:column}
 .seg.row2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.seg.quals{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg.quals .chip{min-width:0;min-height:44px;padding:4px 2px;font-size:14px}
 .seg.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg.row3 .chip{min-width:0;flex-direction:column}
 .seg.row2 .chip{min-width:0;flex-direction:column}

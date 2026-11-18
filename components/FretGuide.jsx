@@ -86,7 +86,7 @@ export default function FretGuide(){
           <div className="who"><b>{res.bass}번 줄 베이스</b><span>{res.formName}</span></div>
           <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
         </figcaption>
-        <Diagram res={res} rootPc={root} label={label} names={nm} aria={ariaFor(res,sym)}/>
+        <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
       </figure>
     )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
@@ -113,7 +113,7 @@ export default function FretGuide(){
             <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{d===0?'제자리':`${d}프렛 이동`}</span></>}</span></div>
             <div className="pos">{hp===0?'개방':hp+'프렛'}</div>
           </figcaption>
-          <Diagram res={res} rootPc={c.root} label={label} names={nm} aria={ariaFor(res,name)}/>
+          <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
         </figure>
       );
     });
@@ -142,7 +142,7 @@ export default function FretGuide(){
         </div>
         <div className="group">
           <h2 id="h-qual">코드</h2>
-          <div className="seg" role="group" aria-labelledby="h-qual">
+          <div className="seg quals" role="group" aria-labelledby="h-qual">
             {QUALITIES.map(x=><Chip key={x.id} k="q" v={x.id} on={qid===x.id} disabled={qOff(x.id)} onPick={pick}>{x.label}</Chip>)}
           </div>
         </div>
@@ -157,9 +157,9 @@ export default function FretGuide(){
         <div className="group">
           <h2 id="h-t">구성음</h2>
           <div className="seg row4" role="group" aria-labelledby="h-t">
-            {['1','3','5','7'].map((l,i)=>(
+            {[0,1,2,3].map(i=>(
               <Chip key={i} k="t" v={String(i)} on={i<q.tones.length&&t[i]} disabled={tOff(i)} onPick={pick}>
-                <span>{l}</span><small>{i<q.tones.length?nm[(root+q.tones[i])%12]:''}</small>
+                <span>{i<q.tones.length?(q.deg[i]==='R'?'1':q.deg[i]):'–'}</span><small>{i<q.tones.length?nm[(root+q.tones[i])%12]:''}</small>
               </Chip>
             ))}
           </div>

@@ -1,5 +1,5 @@
 // 한 폼의 지판 그림 (5프렛 창)
-import {DEGREE,windowStart,barres} from '../lib/fretlogic.js';
+import {degreeOf,windowStart,barres} from '../lib/fretlogic.js';
 
 const PAD_L=46,CELL=58,TOP=32,GAP=24,W=PAD_L+CELL*5+14,H=172;
 const WIDTHS=[1,1.2,1.6,2.1,2.7,3.3];
@@ -12,12 +12,12 @@ export function ariaFor(res,sym){
   return `${sym}, ${res.bass}번 줄 베이스 ${res.formName}, ${res.baseFret===0?'개방 위치':res.baseFret+'프렛'}. `+parts.join(', ');
 }
 
-export default function Diagram({res,rootPc,label,names,aria}){
+export default function Diagram({res,rootPc,quality,label,names,aria}){
   const start=windowStart(res.notes);
   const X=fret=>PAD_L+(fret-start)*CELL+CELL/2;
   const Y=s=>TOP+(s-1)*GAP;
   const mx=PAD_L-22;
-  const textFor=n=>label==='finger'?n.finger:label==='note'?names[n.pc]:DEGREE[(n.pc-rootPc+12)%12];
+  const textFor=n=>label==='finger'?n.finger:label==='note'?names[n.pc]:degreeOf(quality,n.pc-rootPc);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
       <rect x={PAD_L} y="20" width={CELL*5} height="144" rx="3" fill="var(--rosewood)"/>
