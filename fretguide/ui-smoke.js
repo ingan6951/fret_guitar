@@ -50,6 +50,12 @@ let n=0;
   eq(t.state().prog,[{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}],'진행 추가');
   eq(t.svgs(),3,'진행 카드 3개');
   if(!/총 손 이동/.test(t.stubs['#count'].textContent)) fails.push('총 이동 표시 없음');
+  // 진행 화면의 선택 칸으로 고르고 추가
+  t.choose('root',5); t.choose('q','maj7'); t.click('padd');
+  eq(t.state().prog[3],{root:5,q:'maj7'},'선택 칸으로 추가');
+  eq([t.state().root,t.state().q],[5,'maj7'],'선택 칸이 왼쪽 메뉴와 같은 상태');
+  if(!/<select data-sel="root"/.test(t.stubs['#prog'].innerHTML)) fails.push('진행 화면에 근음 선택 칸 없음');
+  t.click('pdel',3);
   t.click('pdel',1);
   eq(t.state().prog,[{root:2,q:'m7'},{root:0,q:'maj7'}],'진행 빼기');
   for(let i=0;i<10;i++) t.click('padd');

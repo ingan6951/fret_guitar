@@ -16,11 +16,11 @@ function boot(initialStore){
     '#tsel [data-k="t"]':['t',['0','1','2','3']],
     '[data-k="lay"]':['lay',['adj','skip']]
   };
-  let handler=null;
+  let handler=null,changeHandler=null;
   const document={
     querySelector:s=>stubs[s]||(stubs[s]=mk()),
     querySelectorAll:s=>lists[s]||(lists[s]=(defs[s]?defs[s][1]:['x','x','x']).map(v=>mk(defs[s]?defs[s][0]:undefined,v))),
-    addEventListener:(t,h)=>{ if(t==='click') handler=h; }
+    addEventListener:(t,h)=>{ if(t==='click') handler=h; if(t==='change') changeHandler=h; }
   };
   const store=Object.assign({},initialStore);
   const localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v;}};
@@ -29,10 +29,12 @@ function boot(initialStore){
   const click=(k,v)=>handler({target:{closest:()=>({id:'',dataset:{k,v:String(v)}})}});
   // 실제 버튼을 누른다 (비활성 버튼은 무시된다)
   const clickBtn=b=>handler({target:{closest:()=>b}});
+  // 선택 칸 값을 바꾼다
+  const choose=(k,v)=>changeHandler({target:{tagName:'SELECT',dataset:{sel:k},value:String(v)}});
   const flags=sel=>Object.fromEntries(document.querySelectorAll(sel).map(b=>[b.dataset.v,b.disabled]));
   const cards=()=>stubs['#cards'].innerHTML;
   const svgs=()=>(cards().match(/<svg /g)||[]).length;
   const state=()=>JSON.parse(store['fretguide.v2']);
-  return {stubs,lists,click,clickBtn,flags,cards,svgs,store,state,document};
+  return {stubs,lists,click,clickBtn,choose,flags,cards,svgs,store,state,document};
 }
 module.exports={boot};
