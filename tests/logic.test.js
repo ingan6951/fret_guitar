@@ -1,9 +1,5 @@
-// 폼 생성 로직 검증. index.html의 LOGIC 블록만 꺼내 실행하고, 별도의 전수 탐색(브루트포스)과 결과를 맞춰 본다.
-const fs=require('fs');
-const path=require('path');
-const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
-const logic=html.split('/* LOGIC:START */')[1].split('/* LOGIC:END */')[0];
-const L=new Function(logic+';return {QUALITIES,OPEN,DEGREE,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,windowStart,handPos,moveCost,candidates,planProgression};')();
+// 폼 생성 로직 검증. lib/fretlogic.js를 별도의 전수 탐색(브루트포스)과 맞춰 본다.
+import * as L from '../lib/fretlogic.js';
 const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,handPos,moveCost,candidates,planProgression}=L;
 
 const fails=[];

@@ -4,19 +4,24 @@
 
 ## 구성
 
+Next.js(App Router)로 만든 정적 사이트입니다. 서버 없이 `out/`에 HTML·JS로 내보냅니다.
+
 | 경로 | 설명 |
 | --- | --- |
-| `fretguide/index.html` | 앱 본체 (단일 HTML, 외부 빌드 없음) |
-| `fretguide/test.js` | 폼 생성 로직 검증 (전수 탐색과 대조) |
-| `fretguide/ui-smoke.js` | UI 조합 스모크 테스트 |
-| `fretguide/ui-disabled.js` | 불가능한 조합의 버튼 비활성화 테스트 |
-| `fretguide/harness.js` | UI 테스트용 가짜 DOM |
+| `app/` | 페이지(`page.jsx`), 레이아웃, 전역 스타일(`globals.css`) |
+| `components/FretGuide.jsx` | 화면 전체 (상태·조작) |
+| `components/Diagram.jsx` | 지판 그림 (SVG) |
+| `lib/fretlogic.js` | 폼 생성·손가락 번호·진행 계산 (UI와 무관한 순수 함수) |
+| `lib/settings.js` | 기본값, 저장값 검증, 브라우저 저장 |
+| `tests/logic.test.js` | 로직 검증 (전수 탐색과 대조) |
+| `tests/ui.test.jsx` | 화면 테스트 (jsdom + Testing Library) |
+| `scripts/test-ui.mjs` | 화면 테스트 실행기 (esbuild로 묶어 node 테스트 러너로 실행) |
 
 ## 기능
 
 - **근음**: 12음 (♯/♭ 표기 전환)
 - **코드**: Major, minor, 7, maj7, m7
-- **구성음**: 1·3·5·7도를 켜고 끄기. 켠 구성음을 한 줄에 하나씩, 인접한 줄에 놓은 폼만 나옴 (근음을 꺼서 루트리스 보이싱도 가능, 트라이어드에서는 7도 비활성)
+- **구성음**: 1·3·5·7도를 켜고 끄기. 켠 구성음을 한 줄에 하나씩 놓은 폼만 나옴 (근음을 꺼서 루트리스 보이싱도 가능, 트라이어드에서는 7도 비활성)
 - **줄 배치**: 붙여서(인접한 줄) / 쉘(음 사이 한 곳에서 한 줄 건너뛰기). 예: 구성음 1·3·7 + 쉘 → 6·4·3번 줄의 R–♭7–3
 - **베이스**: 가장 낮은 소리가 나는 줄 (1~6번 줄), 전체
 - **진행** 보기: 진행 화면의 근음·코드 선택 칸(또는 왼쪽 메뉴)으로 코드를 최대 8개까지 쌓으면, 지금 구성음·줄 배치·베이스 설정으로 손 이동이 가장 적은 폼을 차례로 보여줌 (코드 사이 이동 프렛, 총 이동 표시)
@@ -25,30 +30,21 @@
 - 폼이 없는 조합은 버튼을 비활성화해 빈 화면이 나오지 않게 처리
 - 설정은 브라우저에 저장
 
-## 사용법
+## 개발
 
-`fretguide/index.html`을 브라우저에서 열면 됩니다.
+Node.js 20.9 이상이 필요합니다.
+
+```sh
+npm install
+npm run dev      # http://localhost:3000
+npm test         # 로직 + 화면 테스트
+npm run build    # out/에 정적 사이트 생성
+```
 
 ## 배포
 
-`main`에 푸시하면 GitHub Actions(`.github/workflows/pages.yml`)가 테스트를 돌린 뒤, 통과하면 `fretguide/index.html`을 GitHub Pages에 배포합니다.
-
-- 주소: https://ingan6951.github.io/fret_guitar/
-- 처음 한 번은 저장소 **Settings → Pages → Source**를 **GitHub Actions**로 바꿔야 합니다.
-- Actions 탭에서 **Run workflow**로 수동 배포도 할 수 있습니다.
-
-## 테스트
-
-Node.js가 필요합니다.
-
-```sh
-cd fretguide
-node test.js
-node ui-smoke.js
-node ui-disabled.js
-```
-
-`ui-*.js`는 `harness.js`를 함께 사용합니다.
+- **Vercel**: 저장소를 Vercel에 연결하면 `main` 푸시마다 자동 배포됩니다 (Next.js 자동 인식, 설정 불필요).
+- **GitHub Pages**: `main` 푸시마다 GitHub Actions(`.github/workflows/pages.yml`)가 테스트 후 `GITHUB_PAGES=true`로 빌드해 https://ingan6951.github.io/fret_guitar/ 에 배포합니다.
 
 ## 폼 생성 방식
 
@@ -57,9 +53,4 @@ node ui-disabled.js
 - 손 폭은 3프렛 이내로 계산합니다.
 - 손가락 번호는 가능한 배치를 모두 따져 고릅니다(개방 위치는 실제 누르는 프렛 기준, 개방현은 손가락 없음). 규칙: 높은 프렛일수록 높은 번호, 같은 프렛의 두 손가락은 굵은 줄이 낮은 번호, 바레는 사이 줄이 모두 같거나 더 높은 프렛일 때만(치지 않는 줄·개방현은 가로지르지 않음). 그중 손을 덜 벌리고, 1번 손가락부터 쓰고, 바레와 같은 프렛 여러 손가락을 적게 쓰는 배치를 고릅니다.
 - 바레는 사이의 줄이 모두 더 높은 프렛을 누를 때만 이어 그리고, 치지 않는 줄·개방현은 가로지르지 않습니다.
-
 - 진행의 폼 선택: 코드마다 후보(기본 위치 + 한 옥타브 위)를 두고, 이웃한 두 폼의 이동 비용 합이 가장 적은 경로를 동적 계획법으로 찾습니다. 이동 비용은 손 위치(검지가 놓이는 가장 낮은 누르는 프렛) 차이이고, 같으면 베이스 줄 변화와 손가락 움직임이 적은 쪽을 고릅니다.
-
-## 계획
-
-- Next.js 이전 및 Vercel 배포
