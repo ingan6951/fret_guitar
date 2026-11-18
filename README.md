@@ -28,6 +28,14 @@
 
 `fretguide/index.html`을 브라우저에서 열면 됩니다.
 
+## 배포
+
+`main`에 푸시하면 GitHub Actions(`.github/workflows/pages.yml`)가 테스트를 돌린 뒤, 통과하면 `fretguide/index.html`을 GitHub Pages에 배포합니다.
+
+- 주소: https://ingan6951.github.io/fret_guitar/
+- 처음 한 번은 저장소 **Settings → Pages → Source**를 **GitHub Actions**로 바꿔야 합니다.
+- Actions 탭에서 **Run workflow**로 수동 배포도 할 수 있습니다.
+
 ## 테스트
 
 Node.js가 필요합니다.
