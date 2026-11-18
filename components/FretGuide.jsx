@@ -1,5 +1,5 @@
 'use client';
-// 운지 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
+// 기타 코드 폼 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
@@ -123,7 +123,7 @@ export default function FretGuide(){
   return (
     <div className="app">
       <header className="top">
-        <h1>운지 가이드</h1>
+        <h1>기타 코드 폼</h1>
         <div className="seg compact" role="group" aria-label="보기">
           {MODES.map(([v,l])=><Chip key={v} k="mode" v={v} on={mode===v} onPick={pick}>{l}</Chip>)}
         </div>

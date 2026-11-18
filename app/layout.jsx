@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata={
-  title:'기타 운지 가이드',
+  title:'기타 코드 폼',
   description:'근음과 코드를 고르면 베이스 줄별로 짚을 수 있는 기타 코드 폼과, 코드 진행에서 손 이동이 가장 적은 폼을 보여줍니다.'
 };
 export const viewport={width:'device-width',initialScale:1,themeColor:'#0d0e10'};
