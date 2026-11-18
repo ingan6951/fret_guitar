@@ -225,7 +225,22 @@ let progChecks=0;
 
 // 7) 보이싱 순위: 가짓수, 비용 순서, 전수 정렬과 일치, 1번째는 최소 이동과 같음
 {
-  const {progressionCandidates,countVoicings,rankVoicings}=L;
+  const {progressionCandidates,countVoicings,rankVoicings,toneSubsets,candidatesN,hasFormsN}=L;
+  // 음 개수 조합
+  eq(toneSubsets('m7',3).length,4,'7th 3음 조합 4가지');
+  eq(toneSubsets('m7',4),[[true,true,true,true]],'7th 4음은 전부');
+  eq(toneSubsets('maj',4),[[true,true,true,false]],'트라이어드 4음은 3음 전부');
+  eq(toneSubsets('maj',2).length,3,'트라이어드 2음 조합 3가지');
+  // 음 개수 후보 = 각 조합 후보의 합집합이고, 모두 그 음 개수
+  for(const qq of QUALITIES) for(const n of [2,3,4]) for(const rs of [6,4,'all']) for(const layout of ['adj','skip']){
+    const got=candidatesN(4,qq.id,rs,n,layout);
+    const want=new Set();
+    toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,layout).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
+    eq(got.length,want.size,`음 개수 후보 수 ${qq.id} ${n} ${rs} ${layout}`);
+    const k=Math.min(n,qq.tones.length);
+    got.forEach(r=>{ if(r.notes.filter(Boolean).length!==k) fails.push(`음 개수 ${qq.id} ${n}: ${r.notes.filter(Boolean).length}음`); });
+    eq(hasFormsN(qq.id,rs,n,layout),got.length>0,`hasFormsN ${qq.id} ${n} ${rs} ${layout}`);
+  }
   let seed=11;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
   const qs=QUALITIES.map(q=>q.id);
@@ -233,8 +248,8 @@ let progChecks=0;
     const len=1+rnd(3);
     const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
     const rs=[6,5,4,3,'all'][rnd(5)],layout=['adj','skip'][rnd(2)];
-    const t=[rnd(4)>0,true,rnd(2)===0,rnd(3)>0];
-    const cands=progressionCandidates(prog,rs,t,layout);
+    const nn=2+rnd(3);
+    const cands=progressionCandidates(prog,rs,nn,layout);
     const n=countVoicings(cands);
     // 전수: 모든 조합의 비용
     const all=[];
@@ -256,11 +271,14 @@ let progChecks=0;
       keys.add(key);
     }
     if(n<=300&&r.get(n)!==null) fails.push(`보이싱 ${trial}: 가짓수보다 많이 나옴`);
-    const best=planProgression(prog,rs,t,layout);
-    if(Math.abs(r.get(0).total-best.total)>1e-6) fails.push(`보이싱 ${trial}: 1번째 ${r.get(0).total} != 최소 ${best.total}`);
+    if(nn===4){
+      // 음 개수 4 = 모든 구성음: 최소 이동 계산과 1번째가 같다
+      const best=planProgression(prog,rs,[true,true,true,true],layout);
+      if(Math.abs(r.get(0).total-best.total)>1e-6) fails.push(`보이싱 ${trial}: 1번째 ${r.get(0).total} != 최소 ${best.total}`);
+    }
   }
   // 큰 진행도 앞쪽은 빠르게 나온다
-  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',[true,true,true,true],'adj');
+  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',4,'adj');
   const rb=rankVoicings(big);
   let last=-1;
   for(let k=0;k<200;k++){ const v=rb.get(k); if(v.total<last-1e-9) fails.push('큰 진행: 비용 순서'); last=v.total; }

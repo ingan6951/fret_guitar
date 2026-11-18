@@ -132,7 +132,7 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.equal(t.svgs(),3);
   assert.match(t.container.querySelector('.vcount').textContent,/가능한 보이싱 216가지/);
   assert.equal(t.container.querySelector('.vpos').textContent,'1 / 216');
-  assert.match(t.count(),/1번째 · 총 손 이동/);
+  assert.match(t.count(),/1번째 · 4음 · 총 손 이동/);
   assert.equal(t.container.querySelector('.picker'),null);
   const prevBtn=t.container.querySelector('button[data-k="vprev"]'),nextBtn=t.container.querySelector('button[data-k="vnext"]');
   assert.equal(prevBtn.disabled,true);
@@ -152,6 +152,19 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   // 설정을 바꾸면 1번째로 돌아간다
   t.click('rs','all');
   assert.match(t.container.querySelector('.vpos').textContent,/^1 \//);
+  // 진행 보기는 구성음 대신 음 개수: 구성음 칩이 없고 음 개수 칩이 있다
+  assert.equal(t.container.querySelector('button[data-k="t"]'),null);
+  assert.equal(t.btn('pn','4').getAttribute('aria-pressed'),'true');
+  t.click('rs','4');
+  assert.match(t.container.querySelector('.vcount').textContent,/216가지/);
+  // 3음: 7th는 구성음 3개 조합(4가지)의 폼을 모두 후보로 → 가짓수가 바뀌고 카드마다 3음
+  t.click('pn','3');
+  assert.equal(t.state().progN,3);
+  assert.doesNotMatch(t.container.querySelector('.vcount').textContent,/216가지/);
+  assert.match(t.count(),/3음/);
+  for(const svg of t.container.querySelectorAll('.cards svg')) assert.equal(svg.querySelectorAll('.dot,.open').length,3,'3음 폼');
+  t.click('pn','4');
+  t.click('rs','all');
   // 진행 수정 → 다시 고르기 화면
   t.click('pedit','');
   assert.equal(t.state().progDone,false);
@@ -180,6 +193,8 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.equal(b.state().prog.length,8); assert.equal(b.state().mode,'prog'); assert.equal(b.state().progDone,true);
   assert.ok(b.svgs()>0,'저장된 결과 화면 복원');
   b.click('pedit','');
+  // 코드 보기로 돌아가면 구성음 칩이 다시 보인다
+  b.click('mode','chord'); assert.ok(b.btn('t','0')); assert.equal(b.container.querySelector('button[data-k="pn"]'),null); b.click('mode','prog');
   b.click('pclear','');
   assert.deepEqual(b.state().prog,[]);
   b.click('mode','chord');

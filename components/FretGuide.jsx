@@ -1,7 +1,7 @@
 'use client';
 // 운지 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
@@ -9,6 +9,7 @@ const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','�
 const LAYOUTS=[['adj','붙여서','인접한 줄'],['skip','쉘','한 줄 건너뛰기']];
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
 const MODES=[['chord','코드'],['prog','진행']];
+const NOTE_COUNTS=[[2,'2음','구성음 2개'],[3,'3음','구성음 3개'],[4,'4음','모든 구성음']];
 
 function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
   return (
@@ -41,11 +42,12 @@ export default function FretGuide(){
       case 'pclear': return {...s,prog:[],progDone:false};
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
       case 'pedit': return {...s,progDone:false};
+      case 'pn': return {...s,progN:Number(v)};
       default: return s;
     }
   });
 
-  const {root,q:qid,rs,t,layout,label,flat,octave,mode,prog,progDone}=state;
+  const {root,q:qid,rs,t,layout,label,flat,octave,mode,prog,progDone,progN}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
@@ -57,18 +59,21 @@ export default function FretGuide(){
   const showResult=isProg&&progDone&&prog.length>0;
   const rank=useMemo(()=>{
     if(!showResult) return null;
-    const c=progressionCandidates(prog,rs,t,layout);
+    const c=progressionCandidates(prog,rs,progN,layout);
     return {n:countVoicings(c),list:rankVoicings(c)};
-  },[showResult,prog,rs,t,layout]);
+  },[showResult,prog,rs,progN,layout]);
   useEffect(()=>{ setVi(0); },[rank]);
   const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
   const fmt=n=>n.toLocaleString('ko-KR');
   const needOct=!isProg&&list.some(r=>r.canOctave);
 
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
-  const qOff=id=>id!==qid&&!hasForms(id,rs,t,layout);
-  const rsOff=v=>v!==String(rs)&&!hasForms(qid,v==='all'?'all':Number(v),t,layout);
-  const layOff=v=>v!==layout&&!hasForms(qid,rs,t,v);
+  // 진행 보기에서는 구성음 대신 음 개수(progN)로 판단한다
+  const has=(id,r,lay)=>isProg?hasFormsN(id,r,progN,lay):hasForms(id,r,t,lay);
+  const qOff=id=>id!==qid&&!has(id,rs,layout);
+  const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v),layout);
+  const layOff=v=>v!==layout&&!has(qid,rs,v);
+  const pnOff=n=>n!==progN&&!hasFormsN(qid,rs,n,layout);
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
   const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasForms(qid,rs,next,layout); };
 
@@ -87,17 +92,17 @@ export default function FretGuide(){
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
   }else if(!showResult){
     cards=<div className="empty">{prog.length
-      ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>가능한 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
+      ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>왼쪽 &quot;음 개수&quot;에 맞는 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
       :<><p>코드를 고르고 &quot;+ 추가&quot;를 눌러 진행을 먼저 만드세요.</p><p>다 고른 뒤 &quot;보이싱 찾기&quot;를 누르면 결과가 나와요.</p></>}</div>;
-    count=`코드 ${prog.length}개 / 최대 ${MAX_PROG}개`;
+    count=`코드 ${prog.length}개 / 최대 ${MAX_PROG}개 · ${progN}음`;
   }else if(!cur){
-    cards=<div className="empty"><p>지금 구성음·베이스·줄 배치로는 이 진행의 폼이 하나도 없어요.</p><p>설정을 바꾸거나 진행을 수정해 보세요.</p></div>;
+    cards=<div className="empty"><p>지금 음 개수·베이스·줄 배치로는 이 진행의 폼이 하나도 없어요.</p><p>설정을 바꾸거나 진행을 수정해 보세요.</p></div>;
     count='가능한 보이싱 0가지';
   }else{
     let moved=0,prev=null;
     cards=prog.map((c,i)=>{
       const res=cur.pick[i],name=chordName(c);
-      if(!res){ prev=null; return <div className="empty" key={i}><p>{i+1}. {name}: 지금 구성음·베이스·줄 배치로는 잡히는 폼이 없어요.</p></div>; }
+      if(!res){ prev=null; return <div className="empty" key={i}><p>{i+1}. {name}: 지금 음 개수·베이스·줄 배치로는 잡히는 폼이 없어요.</p></div>; }
       const d=prev?Math.abs(handPos(res)-handPos(prev)):null;
       if(d!==null) moved+=d;
       prev=res;
@@ -112,7 +117,7 @@ export default function FretGuide(){
         </figure>
       );
     });
-    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(layout==='skip'?' · 쉘':'');
+    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · ${progN}음 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(layout==='skip'?' · 쉘':'');
   }
 
   return (
@@ -141,6 +146,14 @@ export default function FretGuide(){
             {QUALITIES.map(x=><Chip key={x.id} k="q" v={x.id} on={qid===x.id} disabled={qOff(x.id)} onPick={pick}>{x.label}</Chip>)}
           </div>
         </div>
+        {isProg?(
+        <div className="group">
+          <h2 id="h-n">음 개수</h2>
+          <div className="seg row3" role="group" aria-labelledby="h-n">
+            {NOTE_COUNTS.map(([v,l,d])=><Chip key={v} k="pn" v={String(v)} on={progN===v} disabled={pnOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+          </div>
+        </div>
+        ):(
         <div className="group">
           <h2 id="h-t">구성음</h2>
           <div className="seg row4" role="group" aria-labelledby="h-t">
@@ -151,6 +164,7 @@ export default function FretGuide(){
             ))}
           </div>
         </div>
+        )}
         <div className="group">
           <h2 id="h-lay">줄 배치</h2>
           <div className="seg row2" role="group" aria-labelledby="h-lay">
