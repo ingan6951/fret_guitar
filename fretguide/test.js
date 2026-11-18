@@ -59,6 +59,18 @@ QUALITIES.forEach(q=>{
           if(Math.min(...fr)<0||Math.max(...fr)>MAX_FRET) fails.push(`${tag}: 프렛 범위 ${fr}`);
           if(Math.max(...fr)-Math.min(...fr)>MAX_SPAN) fails.push(`${tag}: 손 폭 ${fr}`);
           sounded.forEach(n=>{ if(!(n.finger>=1&&n.finger<=4)) fails.push(`${tag}: 손가락 ${n.finger}`); });
+          // 쉘 손가락 규칙: 높은 프렛 = 높은 번호, 같은 프렛 다른 손가락은 굵은 줄이 낮은 번호, 같은 손가락은 바레 가능할 때만
+          if(layout==='skip'){
+            const fr=res.notes.map(n=>n?n.fret:null);
+            for(let a=0;a<6;a++) for(let b=a+1;b<6;b++){
+              const x=res.notes[a],y=res.notes[b];
+              if(!x||!y||x.fret===0||y.fret===0) continue;
+              if(x.fret!==y.fret){ if((x.fret<y.fret)!==(x.finger<y.finger)||x.finger===y.finger) fails.push(`${tag}: 손가락 순서 ${fr}`); }
+              else if(x.finger===y.finger){
+                for(let k=a+1;k<b;k++) if(fr[k]===null||fr[k]<=x.fret) fails.push(`${tag}: 뮤트 줄을 가로지르는 바레 ${fr}`);
+              } else if(x.finger>y.finger) fails.push(`${tag}: 같은 프렛 손가락 순서 ${fr}`);
+            }
+          }
         });
         // 2) 전수 탐색과 같은 폼 집합인지 (옥타브 위 포함)
         const want=new Set();
@@ -124,14 +136,18 @@ QUALITIES.forEach(q=>{
   const shell=collect(0,'7',6,false,[true,true,false,true],'skip');
   const s1=shell.find(r=>r.formName==='R–♭7–3');
   eq(s1&&s1.notes.map(n=>n?n.fret:null),[8,null,8,9,null,null],'C7 쉘 R–♭7–3 (6번 줄)');
+  eq(s1&&s1.notes.map(n=>n?n.finger:null),[1,null,2,3,null,null],'C7 쉘 손가락');
   // 쉘: Cmaj7, 5번 줄 베이스 R–7–3 → 5번 줄 3, 4번 줄 뮤트, 3번 줄 4, 2번 줄 5
   const s2=collect(0,'maj7',5,false,[true,true,false,true],'skip').find(r=>r.formName==='R–7–3');
   eq(s2&&s2.notes.map(n=>n?n.fret:null),[null,3,null,4,5,null],'Cmaj7 쉘 R–7–3 (5번 줄)');
+  eq(s2&&s2.notes.map(n=>n?n.finger:null),[null,1,null,2,3,null],'Cmaj7 쉘 손가락');
   // 1음은 건너뛸 줄이 없어 쉘 폼이 없다
   eq(hasForms('maj',6,[true,false,false,false],'skip'),false,'1음 쉘');
   // 바레는 치지 않는 줄을 가로지르지 않는다
   const mk=(st,fr,fi)=>({string:st,fret:fr,finger:fi});
   eq(barres([null,mk(5,3,1),null,mk(3,3,1),mk(2,3,1),null]),[{fret:3,top:2,bottom:3}],'바레가 뮤트 줄을 건너지 않음');
+  // 사이 줄이 더 높은 프렛을 누르면 바레는 이어진다 (붙여서 배치의 기존 동작)
+  eq(barres([null,null,mk(4,5,1),mk(3,7,3),mk(2,5,1),null]),[{fret:5,top:2,bottom:4}],'더 높은 프렛 위로 이어지는 바레');
 }
 
 // 5) 바레 계산이 모든 결과에서 깨지지 않는다
