@@ -196,17 +196,17 @@ function maskFor(qualityId,t){
   return q.tones.map((_,i)=>i).filter(i=>t[i]);
 }
 
-// 줄 i(0=6번 줄)에서 j까지 한 손가락으로 바레할 수 있는지: 사이의 줄이 모두 그보다 높은 프렛을 누르고 있어야 한다
+// 줄 i(0=6번 줄)에서 j까지 한 손가락으로 바레할 수 있는지: 사이의 줄이 모두 같거나 더 높은 프렛을 누르고 있어야 한다
 function canBarre(fr,i,j,at){
-  for(let k=Math.min(i,j)+1;k<Math.max(i,j);k++) if(fr[k]===null||fr[k]<=at) return false;
+  for(let k=Math.min(i,j)+1;k<Math.max(i,j);k++) if(fr[k]===null||fr[k]<at) return false;
   return true;
 }
 
 // 자연스러운 손가락 번호. fr[i]는 누르는 프렛(null = 누르지 않음: 치지 않는 줄이나 개방현).
-// 줄을 건너뛰는 폼과, 개방현이 섞인 실제 위치에 쓴다.
+// 모든 폼에 쓰고, 개방현이 섞인 위치는 실제 프렛으로 다시 계산한다.
 // 규칙: 높은 프렛일수록 높은 번호, 같은 프렛의 다른 손가락은 굵은 줄이 낮은 번호,
 // 같은 손가락 두 줄은 바레가 가능할 때만(치지 않는 줄을 가로지르지 않음).
-// 비용: 손 벌림(프렛 차보다 손가락 차가 작음) > 1번 손가락에서 시작하지 않음 > 손가락을 건너뜀.
+// 비용: 손 벌림(프렛 차보다 손가락 차가 작음) > 1번 손가락에서 시작하지 않음 > 바레 > 같은 프렛에 손가락 여러 개 > 손가락을 건너뜀.
 const fingerCache={};
 function naturalFingers(fr){
   const key=fr.join(',');
@@ -217,19 +217,21 @@ function naturalFingers(fr){
   const cur=new Array(idx.length);
   const score=()=>{
     let cost=0;
+    const barreFingers=new Set();
     for(let a=0;a<idx.length;a++) for(let b=a+1;b<idx.length;b++){
       const ia=idx[a],ib=idx[b],fa=fr[ia],fb=fr[ib],ga=cur[a],gb=cur[b];
       if(fa===fb){
-        if(ga===gb){ if(!canBarre(fr,ia,ib,fa)) return Infinity; cost+=0.25; }
+        if(ga===gb){ if(!canBarre(fr,ia,ib,fa)) return Infinity; barreFingers.add(ga); }
         else if(ga>gb) return Infinity; // ia가 더 굵은 줄
+        else cost+=0.4; // 같은 프렛을 손가락 여러 개로 누름
         continue;
       }
       const lo=fa<fb?[fa,ga]:[fb,gb],hi=fa<fb?[fb,gb]:[fa,ga];
       const fd=hi[0]-lo[0],gd=hi[1]-lo[1];
       if(gd<=0) return Infinity;
-      cost+=gd<fd?3*(fd-gd):0.5*(gd-fd);
+      cost+=gd<fd?3*(fd-gd):0.25*(gd-fd);
     }
-    return cost+(Math.min(...cur)-1);
+    return cost+0.75*barreFingers.size+(Math.min(...cur)-1);
   };
   const rec=k=>{
     if(k===idx.length){ const c=score(); if(c<bestCost){ bestCost=c; best=cur.slice(); } return; }
@@ -259,9 +261,7 @@ function buildVoicing(quality,strings,order){
   const used=o.filter(x=>x!==null);
   const lo=Math.min(...used),hi=Math.max(...used);
   if(hi-lo>MAX_SPAN) return null;
-  const skip=strings[0]-strings[strings.length-1]>=strings.length;
-  if(skip) naturalFingers(o).forEach((x,i)=>{ f[i]=x; });
-  else strings.forEach(s=>{ f[6-s]=o[6-s]-lo+1; });
+  naturalFingers(o).forEach((x,i)=>{ f[i]=x; });
   return {o,f,bass:bassString,anchorTone,name:order.map(i=>DEGREE[quality.tones[i]]).join('–')};
 }
 

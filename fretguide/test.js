@@ -62,15 +62,15 @@ QUALITIES.forEach(q=>{
             if(n.fret===0){ if(n.finger!==null) fails.push(`${tag}: 개방현에 손가락 ${n.finger}`); }
             else if(!(n.finger>=1&&n.finger<=4)) fails.push(`${tag}: 손가락 ${n.finger}`);
           });
-          // 쉘·개방 위치 손가락 규칙: 높은 프렛 = 높은 번호, 같은 프렛 다른 손가락은 굵은 줄이 낮은 번호, 같은 손가락은 바레 가능할 때만
-          if(layout==='skip'||sounded.some(n=>n.fret===0)){
+          // 손가락 규칙: 높은 프렛 = 높은 번호, 같은 프렛 다른 손가락은 굵은 줄이 낮은 번호, 같은 손가락은 바레 가능할 때만
+          {
             const fr=res.notes.map(n=>n?n.fret:null);
             for(let a=0;a<6;a++) for(let b=a+1;b<6;b++){
               const x=res.notes[a],y=res.notes[b];
               if(!x||!y||x.fret===0||y.fret===0) continue;
               if(x.fret!==y.fret){ if((x.fret<y.fret)!==(x.finger<y.finger)||x.finger===y.finger) fails.push(`${tag}: 손가락 순서 ${fr}`); }
               else if(x.finger===y.finger){
-                for(let k=a+1;k<b;k++) if(fr[k]===null||fr[k]<=x.fret) fails.push(`${tag}: 뮤트 줄을 가로지르는 바레 ${fr}`);
+                for(let k=a+1;k<b;k++) if(fr[k]===null||fr[k]<x.fret) fails.push(`${tag}: 뮤트 줄을 가로지르는 바레 ${fr}`);
               } else if(x.finger>y.finger) fails.push(`${tag}: 같은 프렛 손가락 순서 ${fr}`);
             }
           }
@@ -121,6 +121,16 @@ QUALITIES.forEach(q=>{
   const list=collect(0,'m7',4,false,t);
   const rf=list.find(r=>r.formName==='R–5–♭7–♭3');
   eq(rf&&rf.notes.map(n=>n?n.fret:null),[null,null,10,12,11,11],'Cm7 R–5–♭7–♭3 (4번 줄 베이스)');
+  eq(rf&&rf.notes.map(n=>n?n.finger:null),[null,null,1,3,2,2],'Cm7 R–5–♭7–♭3 손가락 (2·1번 줄 미니 바레)');
+  // 사이 줄이 더 높은 프렛이면 바레: Am7 5번 줄 베이스 12·14·12·13 → 1·3·1·2
+  const ab=collect(9,'m7',5,true,t).find(r=>r.formName==='R–5–♭7–♭3'&&r.baseFret===12);
+  eq(ab&&ab.notes.map(n=>n?[n.fret,n.finger]:null),[null,[12,1],[14,3],[12,1],[13,2],null],'Am7 12프렛 손가락');
+  // 같은 프렛 두 음 사이에 더 높은 음: D 트라이어드 3번 줄 베이스 5–R–3 (3·2·1번 줄 2·3·2) → 1·3·2 (D 코드 운지)
+  const dd=collect(2,'maj',3,false,[true,true,true,false]).find(r=>r.formName==='5–R–3'&&r.baseFret===2);
+  eq(dd&&dd.notes.map(n=>n?[n.fret,n.finger]:null),[null,null,null,[2,1],[3,3],[2,2]],'D 2·3·2 손가락');
+  // 같은 프렛 네 줄은 바레: Am7 4번 줄 베이스 ♭7–♭3–5–R (5·5·5·5) → 1·1·1·1
+  const b4=collect(9,'m7',4,false,t).find(r=>r.formName==='♭7–♭3–5–R'&&r.baseFret===5);
+  eq(b4&&b4.notes.map(n=>n?n.finger:null),[null,null,1,1,1,1],'같은 프렛 네 줄 바레');
   // 근음 끄기: Am7 → 근음 없는 3도-5도-7도 폼
   const rootless=collect(9,'m7',5,false,[false,true,true,true]);
   if(!rootless.length) fails.push('Am7 근음 없는 폼이 없음');
