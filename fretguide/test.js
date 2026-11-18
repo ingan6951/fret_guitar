@@ -3,8 +3,8 @@ const fs=require('fs');
 const path=require('path');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
 const logic=html.split('/* LOGIC:START */')[1].split('/* LOGIC:END */')[0];
-const L=new Function(logic+';return {QUALITIES,OPEN,DEGREE,MAX_FRET,MAX_SPAN,WINDOW,maskFor,shapesFor,hasForms,resolve,collect,availableWindows,barres,windowStart};')();
-const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,WINDOW,maskFor,shapesFor,hasForms,resolve,collect,availableWindows,barres}=L;
+const L=new Function(logic+';return {QUALITIES,OPEN,DEGREE,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,windowStart};')();
+const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres}=L;
 
 const fails=[];
 const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${msg}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); };
@@ -22,8 +22,8 @@ QUALITIES.forEach(q=>{
     [6,5,4,3,2,1,'all'].forEach(rs=>{
       const strs=rs==='all'?[6,5,4,3,2,1]:[rs];
       for(let root=0;root<12;root++){
-        const got=collect(root,q.id,rs,0,MAX_FRET,false,t);
-        const gotOct=collect(root,q.id,rs,0,MAX_FRET,true,t);
+        const got=collect(root,q.id,rs,false,t);
+        const gotOct=collect(root,q.id,rs,true,t);
         // 1) 모든 폼이 규칙을 지키는지
         [...got,...gotOct].forEach(res=>{
           const sounded=res.notes.filter(Boolean);
@@ -70,7 +70,7 @@ QUALITIES.forEach(q=>{
         if(missing.length||extra.length) fails.push(`${q.id} ${rs} mask=${mask} root=${root}: 전수 탐색과 불일치 (빠짐 ${missing.length}, 초과 ${extra.length}) ${missing[0]||extra[0]}`);
       }
       // 3) hasForms는 근음과 무관하게 실제 결과와 일치
-      const any=collect(0,q.id,rs,0,MAX_FRET,false,t).length>0;
+      const any=collect(0,q.id,rs,false,t).length>0;
       eq(hasForms(q.id,rs,t),any,`hasForms ${q.id} ${rs} mask=${mask}`);
       combos++; if(!any) impossible++;
     });
@@ -81,37 +81,31 @@ QUALITIES.forEach(q=>{
 {
   // Cm7, 4번 줄 베이스: R 5 ♭7 ♭3 → 4번 줄 5프렛(근음)부터 5프렛 이내가 아니라 정확한 프렛 확인
   const t=[true,true,true,true];
-  const list=collect(0,'m7',4,0,MAX_FRET,false,t);
+  const list=collect(0,'m7',4,false,t);
   const rf=list.find(r=>r.formName==='R–5–♭7–♭3');
   eq(rf&&rf.notes.map(n=>n?n.fret:null),[null,null,10,12,11,11],'Cm7 R–5–♭7–♭3 (4번 줄 베이스)');
   // 근음 끄기: Am7 → 근음 없는 3도-5도-7도 폼
-  const rootless=collect(9,'m7',5,0,MAX_FRET,false,[false,true,true,true]);
+  const rootless=collect(9,'m7',5,false,[false,true,true,true]);
   if(!rootless.length) fails.push('Am7 근음 없는 폼이 없음');
   rootless.forEach(r=>{ if(r.notes.some(n=>n&&n.pc===9)) fails.push('근음 끈 폼에 근음이 들어 있음'); });
   // 1음: 근음만 켠 폼은 베이스 줄마다 정확히 한 줄
   [6,5,4,3,2,1].forEach(b=>{
-    const one=collect(0,'maj',b,0,MAX_FRET,false,[true,false,false,false]);
+    const one=collect(0,'maj',b,false,[true,false,false,false]);
     eq(one.length,1,`근음 1개 · 베이스 ${b}`);
     eq(one[0].notes.filter(Boolean).length,1,`근음 1개 · 베이스 ${b}: 음 하나`);
   });
   // 트라이어드에서 7도 토글은 무시된다
-  eq(collect(0,'maj',4,0,MAX_FRET,false,[true,true,true,true]).length,collect(0,'maj',4,0,MAX_FRET,false,[true,true,true,false]).length,'트라이어드는 7도 토글 무시');
+  eq(collect(0,'maj',4,false,[true,true,true,true]).length,collect(0,'maj',4,false,[true,true,true,false]).length,'트라이어드는 7도 토글 무시');
   // 7도만 켠 트라이어드는 폼이 없다
   eq(hasForms('maj',4,[false,false,false,true]),false,'트라이어드에서 7도만 켬');
 }
 
-// 5) 5프렛 창 목록이 실제 결과와 일치
+// 5) 바레 계산이 모든 결과에서 깨지지 않는다
 for(const q of QUALITIES){
   for(const t of masks){
     for(const rs of [6,4,1,'all']){
       for(const root of [0,4,9]){
-        const w=availableWindows(root,q.id,rs,t);
-        for(let k=0;k+WINDOW<=MAX_FRET;k++){
-          const n=collect(root,q.id,rs,k,k+WINDOW,false,t).length;
-          const f=w.find(x=>x.start===k);
-          if((n>0)!==!!f||(f&&f.count!==n)) fails.push(`창 불일치 ${q.id} ${rs} root=${root} k=${k}`);
-        }
-        collect(root,q.id,rs,0,MAX_FRET,false,t).forEach(r=>{ barres(r.notes); });
+        collect(root,q.id,rs,false,t).forEach(r=>{ barres(r.notes); });
       }
     }
   }

@@ -26,15 +26,11 @@ let n=0;
     });
   });
 }
-// 5프렛 범위 칩과 옥타브
+// 옥타브
 {
   const t=boot({});
   t.click('q','m7'); t.click('root',4); t.click('rs',6);
-  t.click('win',0); t.click('win','all');
   const before=t.cards();
-  t.click('win',3);
-  if(!t.state().win&&t.state().win!==0) fails.push('프렛 범위 선택이 저장되지 않음');
-  t.click('win','all');
   t.stubs['#oct']; // 옥타브 토글
   t.clickBtn({id:'oct',disabled:false,dataset:{}});
   eq(t.state().octave,true,'옥타브 토글');

@@ -58,8 +58,6 @@ h1,h2,p{margin:0}
 .seg.row4 .chip{min-width:0;flex-direction:column}
 .seg.row7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .seg.row7 .chip{min-width:0;padding:4px 2px}
-.wins{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px}
-.wins .chip{min-height:50px;font-size:15px;font-variant-numeric:tabular-nums}
 .count{font-size:13px;color:var(--steel)}
 .empty{display:grid;gap:10px;justify-items:center;grid-column:1 / -1;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:24px 16px;color:var(--steel);font-size:14px;text-align:center}
 .who{flex-wrap:wrap}
@@ -136,10 +134,6 @@ h1,h2,p{margin:0}
     <div class="group">
       <h2 id="h-rs">베이스</h2>
       <div class="seg row7" id="rstr" role="group" aria-labelledby="h-rs"></div>
-    </div>
-    <div class="group">
-      <h2 id="h-win">프렛 범위</h2>
-      <div class="wins" id="wins" role="group" aria-labelledby="h-win"></div>
     </div>
   </section>
 
@@ -271,40 +265,16 @@ function resolve(rootPc,qualityId,shape,octave){
     bassLabel:DEGREE[(bassNote.pc-rootPc+12)%12],notes};
 }
 
-// 소리 나는 모든 음이 [min,max] 프렛 안에 있는지. 개방현(0)은 min이 0일 때만 허용된다.
-function inFretRange(notes,min,max){
-  return notes.every(n=>n===null||(n.fret>=min&&n.fret<=max));
-}
-
-// 조건에 맞는 폼 목록. rs가 'all'이면 모든 베이스 줄, 프렛 범위가 좁혀져 있으면
-// 기본 위치와 한 옥타브 위 위치를 모두 후보로 두고 범위에 맞는 것만 남긴다.
-function collect(rootPc,qualityId,rs,fmin,fmax,octave,t){
+// 조건에 맞는 폼 목록. rs가 'all'이면 모든 베이스 줄.
+function collect(rootPc,qualityId,rs,octave,t){
   const mask=maskFor(qualityId,t);
-  const filtered=!(fmin===0&&fmax===MAX_FRET);
   const strs=rs==='all'?[6,5,4,3,2,1]:[rs];
   const out=[];
   strs.forEach(s=>shapesFor(s,qualityId,mask).forEach(shape=>{
-    (filtered?[false,true]:[octave]).forEach(oct=>{
-      const res=resolve(rootPc,qualityId,shape,oct);
-      if(filtered&&oct&&!res.octaveApplied) return;
-      if(filtered&&!inFretRange(res.notes,fmin,fmax)) return;
-      out.push(res);
-    });
+    out.push(resolve(rootPc,qualityId,shape,octave));
   }));
   const low=r=>Math.min(...r.notes.filter(Boolean).map(n=>n.fret));
   out.sort((a,b)=>low(a)-low(b)||b.bass-a.bass);
-  return out;
-}
-
-const WINDOW=4; // 5프렛 범위 = 시작 프렛 ~ 시작+4
-
-// 지금 조건에서 실제로 폼이 있는 5프렛 범위의 시작 프렛과 폼 개수
-function availableWindows(rootPc,qualityId,rs,t){
-  const out=[];
-  for(let k=0;k+WINDOW<=MAX_FRET;k++){
-    const count=collect(rootPc,qualityId,rs,k,k+WINDOW,false,t).length;
-    if(count>0) out.push({start:k,count});
-  }
   return out;
 }
 
@@ -335,7 +305,7 @@ function barres(notes){
 
 (function(){
   const $=s=>document.querySelector(s);
-  const DEFAULT={root:9,q:'m7',rs:4,label:'finger',flat:false,octave:false,win:null,t:[true,true,true,true]};
+  const DEFAULT={root:9,q:'m7',rs:4,label:'finger',flat:false,octave:false,t:[true,true,true,true]};
   let state=Object.assign({},DEFAULT);
 
   function sanitize(s){
@@ -345,7 +315,6 @@ function barres(notes){
     if(QUALITIES.some(x=>x.id===s.q)) o.q=s.q;
     if([6,5,4,3,2,1,'all'].includes(s.rs)) o.rs=s.rs;
     if(Array.isArray(s.t)&&s.t.length===4) o.t=s.t.map(Boolean);
-    if(Number.isInteger(s.win)&&s.win>=0&&s.win+WINDOW<=MAX_FRET) o.win=s.win;
     if(['finger','note','degree'].includes(s.label)) o.label=s.label;
     o.flat=!!s.flat;
     o.octave=!!s.octave;
@@ -456,32 +425,14 @@ function barres(notes){
     });
   }
 
-  // 지금 조건에서 폼이 실제로 있는 5프렛 범위만 칩으로 보여준다
-  function renderWins(avail){
-    const box=$('#wins');
-    const act=document.activeElement;
-    const keep=(act&&act.closest&&act.closest('#wins'))?act.dataset.v:null;
-    box.innerHTML=[`<button class="chip" type="button" data-k="win" data-v="all" aria-pressed="${state.win===null}"><span>전체</span><small></small></button>`]
-      .concat(avail.map(w=>`<button class="chip" type="button" data-k="win" data-v="${w.start}" aria-pressed="${state.win===w.start}"><span>${w.start}–${w.start+WINDOW}</span><small>${w.count}개</small></button>`))
-      .join('');
-    if(keep){ const el=box.querySelector(`[data-v="${keep}"]`); if(el) el.focus(); }
-  }
-
   function renderResult(){
     const q=QUALITIES.find(x=>x.id===state.q);
     const nm=names();
     const sym=nm[state.root]+q.suffix;
     $('#sym').textContent=sym;
     $('#tones').innerHTML=q.tones.map(t=>`<span class="${t===0?'r':''}">${nm[(state.root+t)%12]}</span>`).join('');
-    // 고른 범위가 지금 조건에서 비어 있으면 전체로 돌아간다 (빈 화면을 만들지 않는다)
-    const avail=availableWindows(state.root,q.id,state.rs,state.t);
-    let fellBack=false;
-    if(state.win!==null&&!avail.some(w=>w.start===state.win)){ state.win=null; fellBack=true; }
-    const filtered=state.win!==null;
-    const lo=filtered?state.win:0,hi=filtered?state.win+WINDOW:MAX_FRET;
-    const list=collect(state.root,q.id,state.rs,lo,hi,state.octave,state.t);
-    renderWins(avail);
-    const needOct=!filtered&&list.some(r=>r.canOctave);
+    const list=collect(state.root,q.id,state.rs,state.octave,state.t);
+    const needOct=list.some(r=>r.canOctave);
     const oct=$('#oct');
     oct.hidden=!needOct;
     oct.setAttribute('aria-pressed',String(state.octave));
@@ -495,7 +446,7 @@ function barres(notes){
     const box=$('#cards');
     box.className='cards'+(list.length===1?' solo':'');
     box.innerHTML=list.length?cards:`<div class="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>`;
-    $('#count').textContent=`폼 ${list.length}개`+` · ${maskFor(q.id,state.t).length}음`+(filtered?` · ${lo}–${hi}프렛`:'')+(fellBack?' · 선택한 범위에 폼이 없어 전체를 보여줘요':'');
+    $('#count').textContent=`폼 ${list.length}개`+` · ${maskFor(q.id,state.t).length}음`;
   }
 
   function render(){ syncControls(); renderResult(); save(); }
@@ -512,7 +463,6 @@ function barres(notes){
     else if(k==='label') state.label=v;
     else if(k==='acc') state.flat=(v==='flat');
     else if(k==='t'){ const i=Number(v); state.t=state.t.slice(); state.t[i]=!state.t[i]; }
-    else if(k==='win') state.win=v==='all'?null:Number(v);
     render();
   }
 
