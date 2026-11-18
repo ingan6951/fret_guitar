@@ -202,12 +202,17 @@ function canBarre(fr,i,j,at){
   return true;
 }
 
-// 줄을 건너뛰는 폼의 손가락 번호. fr[i]는 상대 프렛(null = 치지 않음).
+// 자연스러운 손가락 번호. fr[i]는 누르는 프렛(null = 누르지 않음: 치지 않는 줄이나 개방현).
+// 줄을 건너뛰는 폼과, 개방현이 섞인 실제 위치에 쓴다.
 // 규칙: 높은 프렛일수록 높은 번호, 같은 프렛의 다른 손가락은 굵은 줄이 낮은 번호,
 // 같은 손가락 두 줄은 바레가 가능할 때만(치지 않는 줄을 가로지르지 않음).
 // 비용: 손 벌림(프렛 차보다 손가락 차가 작음) > 1번 손가락에서 시작하지 않음 > 손가락을 건너뜀.
+const fingerCache={};
 function naturalFingers(fr){
+  const key=fr.join(',');
+  if(fingerCache[key]) return fingerCache[key];
   const idx=fr.map((x,i)=>x===null?-1:i).filter(i=>i>=0);
+  if(!idx.length) return (fingerCache[key]=[null,null,null,null,null,null]);
   let best=null,bestCost=Infinity;
   const cur=new Array(idx.length);
   const score=()=>{
@@ -233,7 +238,7 @@ function naturalFingers(fr){
   rec(0);
   const out=[null,null,null,null,null,null];
   idx.forEach((i,k)=>{ out[i]=best[k]; });
-  return out;
+  return (fingerCache[key]=out);
 }
 
 // 인접한 줄에 order 순서(낮은 줄 -> 높은 줄)로 구성음을 한 줄에 하나씩 놓은 폼.
@@ -318,10 +323,13 @@ function baseFretFor(rootPc,shape,octave){
 function resolve(rootPc,qualityId,shape,octave){
   const r=baseFretFor(rootPc,shape,octave);
   const f=r.fret;
+  // 개방현이 섞이면 이동형 폼 번호 대신 실제 누르는 프렛으로 손가락을 다시 정한다 (개방현은 손가락 없음)
+  const hasOpen=shape.o.some(off=>off!==null&&f+off===0);
+  const fingers=hasOpen?naturalFingers(shape.o.map(off=>off===null||f+off===0?null:f+off)):shape.f;
   const notes=shape.o.map((off,i)=>off===null?null:{
     string:6-i,
     fret:f+off,
-    finger:shape.f[i],
+    finger:fingers[i],
     pc:(OPEN[i]+f+off)%12
   });
   const bassNote=notes.find(Boolean);
@@ -523,7 +531,6 @@ function barres(notes){
       const pos=res.baseFret===0?'개방':res.baseFret+'프렛';
       return `<figure class="card"><figcaption><div class="who"><b>${res.bass}번 줄 베이스</b><span>${res.formName}</span></div><div class="pos">${pos}</div></figcaption>`
         +diagram(res,state.root,ariaFor(res,sym))
-        +(res.notes.some(n=>n&&n.fret===0)?`<p class="hint">개방현이 섞인 위치에서는 손가락 번호가 이동형 폼 기준이라, 실제 개방 코드 운지와 다를 수 있어요.</p>`:'')
         +`</figure>`;
     }).join('');
     const box=$('#cards');
