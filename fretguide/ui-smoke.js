@@ -39,6 +39,32 @@ let n=0;
   eq(t.state().octave,true,'옥타브 토글');
   if(t.cards()===before) fails.push('옥타브를 켰는데 화면이 그대로');
 }
+// 진행 보기: 추가·빼기·비우기, 저장·복원
+{
+  const t=boot({});
+  t.click('mode','prog');
+  if(!/추가/.test(t.stubs['#cards'].innerHTML)) fails.push('빈 진행 안내가 없음');
+  t.click('root',2); t.click('q','m7'); t.click('padd');
+  t.click('root',7); t.click('q','7'); t.click('padd');
+  t.click('root',0); t.click('q','maj7'); t.click('padd');
+  eq(t.state().prog,[{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}],'진행 추가');
+  eq(t.svgs(),3,'진행 카드 3개');
+  if(!/총 손 이동/.test(t.stubs['#count'].textContent)) fails.push('총 이동 표시 없음');
+  t.click('pdel',1);
+  eq(t.state().prog,[{root:2,q:'m7'},{root:0,q:'maj7'}],'진행 빼기');
+  for(let i=0;i<10;i++) t.click('padd');
+  eq(t.state().prog.length,8,'진행 최대 8개');
+  const b=boot({'fretguide.v2':t.store['fretguide.v2']});
+  eq(b.state().prog.length,8,'진행 복원');
+  eq(b.state().mode,'prog','보기 복원');
+  t.click('pclear');
+  eq(t.state().prog,[],'진행 비우기');
+  t.click('mode','chord');
+  if(t.svgs()<1) fails.push('코드 보기로 돌아왔는데 빈 화면');
+  // 잘못된 진행 저장값은 걸러진다
+  const c=boot({'fretguide.v2':JSON.stringify({mode:'prog',prog:[{root:3,q:'m7'},{root:99,q:'x'},null]})});
+  eq(c.state().prog,[{root:3,q:'m7'}],'잘못된 진행 저장값');
+}
 // 저장 후 복원
 {
   const a=boot({});

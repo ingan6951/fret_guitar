@@ -29,6 +29,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--ebony);color:var(--ivory);font-family:var(--body);-webkit-text-size-adjust:100%}
 body{min-height:100%}
 button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -38,6 +39,17 @@ h1,h2,p{margin:0}
 .app{max-width:1180px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:20px}
 .top h1{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.01em;text-wrap:balance}
 .top p{color:var(--steel);font-size:14px;margin-top:4px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.prog{display:grid;gap:10px}
+.prog-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prog-list .chip{flex-direction:row;gap:8px;min-height:44px;padding:4px 12px;font-size:15px}
+.prog-list .chip i{font-style:normal;color:var(--steel);font-weight:400}
+.prog-list .arrow{color:var(--steel);font-size:13px}
+.prog-actions{display:flex;gap:8px;flex-wrap:wrap}
+.prog-actions .chip{min-height:44px;flex-direction:row;font-size:14px;padding:4px 14px}
+.prog-actions .chip.add{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.prog-actions .chip.add:disabled{background:var(--panel);border-color:var(--line);color:var(--ivory)}
+.move{color:var(--brass);font-weight:700}
 
 .rail{display:grid;gap:18px;align-content:start}
 .group{display:grid;gap:8px}
@@ -118,6 +130,7 @@ h1,h2,p{margin:0}
 <div class="app">
   <header class="top">
     <h1>운지 가이드</h1>
+    <div class="seg compact" id="mode" role="group" aria-label="보기"></div>
   </header>
 
   <section class="rail" aria-label="코드 선택">
@@ -156,6 +169,7 @@ h1,h2,p{margin:0}
       </div>
     </div>
 
+    <div class="prog" id="prog" hidden></div>
     <p class="count" id="count"></p>
     <div class="cards" id="cards" aria-live="polite"></div>
 
@@ -383,11 +397,62 @@ function barres(notes){
   });
   return out;
 }
+// 손 위치: 누르는 음 중 가장 낮은 프렛 (모두 개방현이면 0)
+function handPos(res){
+  const fr=res.notes.filter(n=>n&&n.fret>0).map(n=>n.fret);
+  return fr.length?Math.min(...fr):0;
+}
+// 두 폼 사이 이동 비용: 손 위치 차이(프렛)가 기본이고,
+// 같으면 베이스 줄이 덜 바뀌고 손가락(줄마다 프렛 차이)이 덜 움직이는 쪽
+function moveCost(a,b){
+  let fingers=0;
+  a.notes.forEach((n,i)=>{ const m=b.notes[i]; if(n&&m) fingers+=Math.abs(n.fret-m.fret); else if(n||m) fingers+=1; });
+  return Math.abs(handPos(a)-handPos(b))+0.1*Math.abs(a.bass-b.bass)+0.01*fingers;
+}
+
+// 진행의 한 코드 후보: 기본 위치 + 한 옥타브 위 (같은 운지는 하나만)
+function candidates(rootPc,qualityId,rs,t,layout){
+  const seen=new Set(),out=[];
+  [false,true].forEach(oct=>collect(rootPc,qualityId,rs,oct,t,layout).forEach(r=>{
+    const k=r.notes.map(n=>n?n.fret:'x').join(',');
+    if(!seen.has(k)){ seen.add(k); out.push(r); }
+  }));
+  return out;
+}
+
+// 진행 전체에서 손 이동 합이 가장 적은 폼을 고른다 (동적 계획법).
+// 폼이 없는 코드는 null이고, 그 앞뒤 구간은 따로 이어진다.
+function planProgression(prog,rs,t,layout){
+  const cands=prog.map(c=>candidates(c.root,c.q,rs,t,layout));
+  const n=prog.length,pick=new Array(n).fill(null);
+  let total=0,i=0;
+  while(i<n){
+    if(!cands[i].length){ i++; continue; }
+    let j=i; while(j+1<n&&cands[j+1].length) j++;
+    let cost=cands[i].map(()=>0);
+    const back=[];
+    for(let k=i+1;k<=j;k++){
+      const nc=[],bk=[];
+      cands[k].forEach(b=>{
+        let best=Infinity,arg=-1;
+        cands[k-1].forEach((a,ai)=>{ const c=cost[ai]+moveCost(a,b); if(c<best-1e-9){ best=c; arg=ai; } });
+        nc.push(best); bk.push(arg);
+      });
+      cost=nc; back[k]=bk;
+    }
+    let bi=0; cost.forEach((c,ci)=>{ if(c<cost[bi]-1e-9) bi=ci; });
+    total+=cost[bi];
+    for(let k=j;k>=i;k--){ pick[k]=cands[k][bi]; if(k>i) bi=back[k][bi]; }
+    i=j+1;
+  }
+  return {pick,total};
+}
 /* LOGIC:END */
 
 (function(){
   const $=s=>document.querySelector(s);
-  const DEFAULT={root:9,q:'m7',rs:4,label:'finger',flat:false,octave:false,t:[true,true,true,true],layout:'adj'};
+  const DEFAULT={root:9,q:'m7',rs:4,label:'finger',flat:false,octave:false,t:[true,true,true,true],layout:'adj',mode:'chord',prog:[]};
+  const MAX_PROG=8;
   let state=Object.assign({},DEFAULT);
 
   function sanitize(s){
@@ -401,6 +466,8 @@ function barres(notes){
     if(['adj','skip'].includes(s.layout)) o.layout=s.layout;
     o.flat=!!s.flat;
     o.octave=!!s.octave;
+    if(['chord','prog'].includes(s.mode)) o.mode=s.mode;
+    if(Array.isArray(s.prog)) o.prog=s.prog.filter(c=>c&&Number.isInteger(c.root)&&c.root>=0&&c.root<12&&QUALITIES.some(x=>x.id===c.q)).slice(0,MAX_PROG).map(c=>({root:c.root,q:c.q}));
     // 저장된 조합이 불가능하면 구성음, 줄 배치, 베이스 순으로 기본값으로 되돌린다
     if(!hasForms(o.q,o.rs,o.t,o.layout)) o.t=DEFAULT.t.slice();
     if(!hasForms(o.q,o.rs,o.t,o.layout)) o.layout=DEFAULT.layout;
@@ -471,6 +538,7 @@ function barres(notes){
     $('#quals').innerHTML=QUALITIES.map(q=>`<button class="chip" type="button" data-k="q" data-v="${q.id}" aria-pressed="false">${q.label}</button>`).join('');
     $('#rstr').innerHTML=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']].map(([v,l])=>`<button class="chip" type="button" data-k="rs" data-v="${v}" aria-pressed="false">${l}</button>`).join('');
     $('#tsel').innerHTML=[0,1,2,3].map(i=>`<button class="chip" type="button" data-k="t" data-v="${i}" aria-pressed="false"><span>${['1','3','5','7'][i]}</span><small></small></button>`).join('');
+    $('#mode').innerHTML=[['chord','코드'],['prog','진행']].map(([v,l])=>`<button class="chip" type="button" data-k="mode" data-v="${v}" aria-pressed="false">${l}</button>`).join('');
     $('#lay').innerHTML=[['adj','붙여서','인접한 줄'],['skip','쉘','한 줄 건너뛰기']].map(([v,l,d])=>`<button class="chip" type="button" data-k="lay" data-v="${v}" aria-pressed="false"><span>${l}</span><small>${d}</small></button>`).join('');
     $('#labels').innerHTML=[['finger','손가락'],['note','음이름'],['degree','도수']].map(([v,l])=>`<button class="chip" type="button" data-k="label" data-v="${v}" aria-pressed="false">${l}</button>`).join('');
     $('#acc').innerHTML=[['sharp','♯'],['flat','♭']].map(([v,l])=>`<button class="chip" type="button" data-k="acc" data-v="${v}" aria-pressed="false" aria-label="${v==='sharp'?'샤프 표기':'플랫 표기'}">${l}</button>`).join('');
@@ -501,6 +569,7 @@ function barres(notes){
       b.setAttribute('aria-pressed',String(on));
       b.disabled=!on&&!hasForms(state.q,state.rs,state.t,b.dataset.v);
     });
+    document.querySelectorAll('[data-k="mode"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state.mode)));
     document.querySelectorAll('[data-k="label"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state.label)));
     document.querySelectorAll('[data-k="acc"]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v==='flat')===state.flat)));
     // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
@@ -539,7 +608,55 @@ function barres(notes){
     $('#count').textContent=`폼 ${list.length}개`+` · ${maskFor(q.id,state.t).length}음`+(state.layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
   }
 
-  function render(){ syncControls(); renderResult(); save(); }
+  function chordName(c){ return names()[c.root]+QUALITIES.find(x=>x.id===c.q).suffix; }
+
+  // 진행 보기: 코드를 쌓고, 손 이동이 가장 적은 폼을 차례로 보여준다
+  function renderProg(){
+    const cur={root:state.root,q:state.q};
+    const curName=chordName(cur);
+    const n=state.prog.length;
+    const chips=state.prog.map((c,i)=>(i?`<span class="arrow" aria-hidden="true">→</span>`:'')
+      +`<button class="chip" type="button" data-k="pdel" data-v="${i}" aria-label="${i+1}번째 ${chordName(c)} 빼기">${chordName(c)}<i aria-hidden="true">×</i></button>`).join('');
+    $('#prog').innerHTML=`<div class="prog-list">${chips}</div>`
+      +`<div class="prog-actions"><button class="chip add" type="button" data-k="padd"${n>=MAX_PROG?' disabled':''}>+ ${curName} 추가</button>`
+      +`<button class="chip" type="button" data-k="pclear"${n?'':' disabled'}>비우기</button></div>`;
+    const box=$('#cards');
+    box.className='cards';
+    if(!n){
+      box.innerHTML=`<div class="empty"><p>왼쪽에서 코드를 고르고 "+ 추가"를 눌러 진행을 만드세요.</p><p>손 이동이 가장 적은 폼을 골라 차례로 보여줘요.</p></div>`;
+      $('#count').textContent=`최대 ${MAX_PROG}개`;
+      return;
+    }
+    const plan=planProgression(state.prog,state.rs,state.t,state.layout);
+    let moved=0,prev=null;
+    box.innerHTML=state.prog.map((c,i)=>{
+      const res=plan.pick[i],name=chordName(c);
+      if(!res){ prev=null; return `<div class="empty"><p>${i+1}. ${name}: 지금 구성음·베이스·줄 배치로는 잡히는 폼이 없어요.</p></div>`; }
+      const d=prev?Math.abs(handPos(res)-handPos(prev)):null;
+      if(d!==null) moved+=d;
+      prev=res;
+      const hp=handPos(res),pos=hp===0?'개방':hp+'프렛';
+      const mv=d===null?'':d===0?' · <span class="move">제자리</span>':` · <span class="move">${d}프렛 이동</span>`;
+      return `<figure class="card"><figcaption><div class="who"><b>${i+1}. ${name}</b><span>${res.bass}번 줄 베이스${mv}</span></div><div class="pos">${pos}</div></figcaption>`
+        +diagram(res,c.root,ariaFor(res,name))
+        +`</figure>`;
+    }).join('');
+    $('#count').textContent=`코드 ${n}개 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(state.layout==='skip'?' · 쉘':'');
+  }
+
+  function render(){
+    syncControls();
+    const prog=state.mode==='prog';
+    $('#prog').hidden=!prog;
+    if(prog){
+      const q=QUALITIES.find(x=>x.id===state.q),nm=names();
+      $('#sym').textContent=nm[state.root]+q.suffix;
+      $('#tones').innerHTML=q.tones.map(t=>`<span class="${t===0?'r':''}">${nm[(state.root+t)%12]}</span>`).join('');
+      $('#oct').hidden=true;
+      renderProg();
+    }else renderResult();
+    save();
+  }
 
   function onClick(e){
     const b=e.target.closest('button');
@@ -552,6 +669,10 @@ function barres(notes){
     else if(k==='rs') state.rs=v==='all'?'all':Number(v);
     else if(k==='label') state.label=v;
     else if(k==='lay') state.layout=v;
+    else if(k==='mode') state.mode=v;
+    else if(k==='padd'){ if(state.prog.length<MAX_PROG) state.prog=state.prog.concat([{root:state.root,q:state.q}]); }
+    else if(k==='pdel'){ const i=Number(v); state.prog=state.prog.filter((_,j)=>j!==i); }
+    else if(k==='pclear') state.prog=[];
     else if(k==='acc') state.flat=(v==='flat');
     else if(k==='t'){ const i=Number(v); state.t=state.t.slice(); state.t[i]=!state.t[i]; }
     render();

@@ -3,8 +3,8 @@ const fs=require('fs');
 const path=require('path');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
 const logic=html.split('/* LOGIC:START */')[1].split('/* LOGIC:END */')[0];
-const L=new Function(logic+';return {QUALITIES,OPEN,DEGREE,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,windowStart};')();
-const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres}=L;
+const L=new Function(logic+';return {QUALITIES,OPEN,DEGREE,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,windowStart,handPos,moveCost,candidates,planProgression};')();
+const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,handPos,moveCost,candidates,planProgression}=L;
 
 const fails=[];
 const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${msg}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); };
@@ -181,6 +181,53 @@ for(const q of QUALITIES){
   }
 }
 
+// 6) 진행: 동적 계획법 결과가 모든 조합을 다 따져 본 최솟값과 같다
+let progChecks=0;
+{
+  let seed=7;
+  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
+  const qs=QUALITIES.map(q=>q.id);
+  for(let trial=0;trial<60;trial++){
+    const len=2+rnd(3);
+    const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
+    const rs=[6,5,4,'all'][rnd(4)];
+    const layout=['adj','skip'][rnd(2)];
+    const t=[true,true,rnd(2)===0,true];
+    const cands=prog.map(c=>candidates(c.root,c.q,rs,t,layout));
+    const plan=planProgression(prog,rs,t,layout);
+    // 폼이 있는 코드는 반드시 후보 중 하나를 고른다
+    plan.pick.forEach((r,i)=>{
+      if((r===null)!==(cands[i].length===0)) fails.push(`진행 ${trial}: ${i}번째 선택 여부`); const key=x=>x.notes.map(n=>n?n.fret:'x').join(',');
+      if(r&&!cands[i].some(c=>key(c)===key(r))) fails.push(`진행 ${trial}: 후보 밖 선택`); });
+    // 전수 탐색 (폼 없는 코드에서 끊긴다)
+    let brute=0,seg=[];
+    const segMin=seg=>{
+      if(!seg.length) return 0;
+      let best=Infinity;
+      const rec=(k,prev,acc)=>{ if(acc>=best) return; if(k===seg.length){ best=acc; return; } seg[k].forEach(b=>rec(k+1,b,acc+(prev?moveCost(prev,b):0))); };
+      rec(0,null,0); return best;
+    };
+    cands.forEach(c=>{ if(c.length) seg.push(c); else { brute+=segMin(seg); seg=[]; } });
+    brute+=segMin(seg);
+    if(Math.abs(brute-plan.total)>1e-6) fails.push(`진행 ${trial}: 최솟값 ${plan.total} != 전수 ${brute}`);
+    // 고른 폼으로 다시 계산한 비용도 같다
+    let again=0;
+    for(let i=1;i<prog.length;i++) if(plan.pick[i]&&plan.pick[i-1]) again+=moveCost(plan.pick[i-1],plan.pick[i]);
+    if(Math.abs(again-plan.total)>1e-6) fails.push(`진행 ${trial}: 고른 폼 비용 ${again} != ${plan.total}`);
+    progChecks++;
+  }
+  // 알려진 예: 같은 코드를 반복하면 이동 0
+  const same=planProgression([{root:9,q:'m7'},{root:9,q:'m7'},{root:9,q:'m7'}],'all',[true,true,true,true],'adj');
+  eq(same.total,0,'같은 코드 반복은 이동 0');
+  // ii–V–I (Dm7–G7–Cmaj7, 쉘 R·3·7): 이동이 작아야 한다 (3프렛 이하)
+  const twofive=planProgression([{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}],'all',[true,true,false,true],'skip');
+  if(!(twofive.total<=3)) fails.push(`ii–V–I 쉘 총 이동 ${twofive.total}`);
+  // 폼이 없는 코드(트라이어드에 7도만)는 null이고 앞뒤는 계속 계산된다
+  const gap=planProgression([{root:0,q:'7'},{root:5,q:'maj'},{root:7,q:'7'}],4,[false,false,false,true],'adj');
+  eq(gap.pick.map(Boolean),[true,false,true],'폼 없는 코드는 건너뜀');
+}
+
+console.log(`진행 ${progChecks}개 검사`);
 console.log(`조합 ${combos}개 (폼 없는 조합 ${impossible}개) 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }
 console.log('모든 검사 통과');
