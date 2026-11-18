@@ -1,6 +1,8 @@
 # fret_guitar
 
-일렉 기타 반주용 **코드 운지 가이드**. 근음과 코드를 고르면, 베이스(최저음) 줄에 따라 짚을 수 있는 폼을 지판 위에 보여줍니다. 연습 중 폰·태블릿에 띄워 놓고 쓰는 것을 전제로 만들었습니다.
+일렉 기타 반주용 **코드 운지 가이드**. 근음과 코드를 고르면, 베이스(최저음) 줄에 따라 짚을 수 있는 폼을 지판 위에 보여줍니다. 코드 진행을 넣으면 손 이동이 가장 적은 폼을 차례로 골라 줍니다. 연습 중 폰·태블릿에 띄워 놓고 쓰는 것을 전제로 만들었습니다.
+
+**사이트: https://fret-guitar.vercel.app**
 
 ## 구성
 
@@ -43,8 +45,10 @@ npm run build    # out/에 정적 사이트 생성
 
 ## 배포
 
-- **Vercel**: 저장소를 Vercel에 연결하면 `main` 푸시마다 자동 배포됩니다 (Next.js 자동 인식, 설정 불필요).
-- **GitHub Pages**: `main` 푸시마다 GitHub Actions(`.github/workflows/pages.yml`)가 테스트 후 `GITHUB_PAGES=true`로 빌드해 https://ingan6951.github.io/fret_guitar/ 에 배포합니다.
+Vercel에 연결되어 있어 `main`에 푸시하면 자동으로 배포됩니다: https://fret-guitar.vercel.app
+
+- Vercel은 빌드(`npm run build`)만 하고 테스트는 돌리지 않으므로, 푸시하기 전에 `npm test`를 실행해 주세요.
+- 배포 상태는 GitHub 커밋 옆의 Vercel 표시나 Vercel 대시보드에서 볼 수 있습니다.
 
 ## 폼 생성 방식
 
