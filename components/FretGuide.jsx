@@ -1,7 +1,7 @@
 'use client';
 // 운지 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,planProgression} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
@@ -20,6 +20,7 @@ function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
 export default function FretGuide(){
   const [state,setState]=useState(DEFAULT);
   const [ready,setReady]=useState(false);
+  const [vi,setVi]=useState(0); // 진행 결과에서 보고 있는 보이싱 순번 (0부터)
 
   useEffect(()=>{ const s=loadState(); if(s) setState(s); setReady(true); },[]);
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
@@ -35,14 +36,16 @@ export default function FretGuide(){
       case 'acc': return {...s,flat:v==='flat'};
       case 'oct': return {...s,octave:!s.octave};
       case 't': { const t=s.t.slice(); t[Number(v)]=!t[Number(v)]; return {...s,t}; }
-      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,{root:s.root,q:s.q}]}:s;
-      case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v))};
-      case 'pclear': return {...s,prog:[]};
+      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,{root:s.root,q:s.q}],progDone:false}:s;
+      case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v)),progDone:false};
+      case 'pclear': return {...s,prog:[],progDone:false};
+      case 'pfind': return s.prog.length?{...s,progDone:true}:s;
+      case 'pedit': return {...s,progDone:false};
       default: return s;
     }
   });
 
-  const {root,q:qid,rs,t,layout,label,flat,octave,mode,prog}=state;
+  const {root,q:qid,rs,t,layout,label,flat,octave,mode,prog,progDone}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
@@ -50,7 +53,16 @@ export default function FretGuide(){
   const isProg=mode==='prog';
 
   const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,layout),[isProg,root,qid,rs,octave,t,layout]);
-  const plan=useMemo(()=>isProg&&prog.length?planProgression(prog,rs,t,layout):null,[isProg,prog,rs,t,layout]);
+  // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
+  const showResult=isProg&&progDone&&prog.length>0;
+  const rank=useMemo(()=>{
+    if(!showResult) return null;
+    const c=progressionCandidates(prog,rs,t,layout);
+    return {n:countVoicings(c),list:rankVoicings(c)};
+  },[showResult,prog,rs,t,layout]);
+  useEffect(()=>{ setVi(0); },[rank]);
+  const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
+  const fmt=n=>n.toLocaleString('ko-KR');
   const needOct=!isProg&&list.some(r=>r.canOctave);
 
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
@@ -73,13 +85,18 @@ export default function FretGuide(){
       </figure>
     )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
-  }else if(!prog.length){
-    cards=<div className="empty"><p>코드를 고르고 &quot;+ 추가&quot;를 눌러 진행을 만드세요.</p><p>손 이동이 가장 적은 폼을 골라 차례로 보여줘요.</p></div>;
-    count=`최대 ${MAX_PROG}개`;
+  }else if(!showResult){
+    cards=<div className="empty">{prog.length
+      ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>가능한 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
+      :<><p>코드를 고르고 &quot;+ 추가&quot;를 눌러 진행을 먼저 만드세요.</p><p>다 고른 뒤 &quot;보이싱 찾기&quot;를 누르면 결과가 나와요.</p></>}</div>;
+    count=`코드 ${prog.length}개 / 최대 ${MAX_PROG}개`;
+  }else if(!cur){
+    cards=<div className="empty"><p>지금 구성음·베이스·줄 배치로는 이 진행의 폼이 하나도 없어요.</p><p>설정을 바꾸거나 진행을 수정해 보세요.</p></div>;
+    count='가능한 보이싱 0가지';
   }else{
     let moved=0,prev=null;
     cards=prog.map((c,i)=>{
-      const res=plan.pick[i],name=chordName(c);
+      const res=cur.pick[i],name=chordName(c);
       if(!res){ prev=null; return <div className="empty" key={i}><p>{i+1}. {name}: 지금 구성음·베이스·줄 배치로는 잡히는 폼이 없어요.</p></div>; }
       const d=prev?Math.abs(handPos(res)-handPos(prev)):null;
       if(d!==null) moved+=d;
@@ -95,7 +112,7 @@ export default function FretGuide(){
         </figure>
       );
     });
-    count=`코드 ${prog.length}개 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(layout==='skip'?' · 쉘':'');
+    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(layout==='skip'?' · 쉘':'');
   }
 
   return (
@@ -178,7 +195,7 @@ export default function FretGuide(){
                 </span>
               ))}
             </div>
-            <div className="picker">
+            {!showResult&&<div className="picker">
               <label>근음
                 <select aria-label="추가할 근음" value={String(root)} onChange={e=>pick('root',e.target.value)}>
                   {nm.map((n,i)=><option key={i} value={String(i)}>{n}</option>)}
@@ -192,8 +209,20 @@ export default function FretGuide(){
               <div className="prog-actions">
                 <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={pick}>+ {sym} 추가</Chip>
                 <Chip k="pclear" v="" disabled={!prog.length} onPick={pick}>비우기</Chip>
+                <Chip k="pfind" v="" className="chip find" disabled={!prog.length} onPick={pick}>보이싱 찾기</Chip>
               </div>
-            </div>
+            </div>}
+            {showResult&&(
+              <div className="voicings">
+                <p className="vcount">가능한 보이싱 <b>{fmt(rank.n)}</b>가지 <span>· 손 이동이 적은 순</span></p>
+                <div className="vnav">
+                  <button className="chip" type="button" data-k="vprev" aria-label="이전 보이싱" disabled={!cur||vi<=0} onClick={()=>setVi(i=>Math.max(0,i-1))}>◀</button>
+                  <span className="vpos" aria-live="polite">{cur?`${fmt(Math.min(vi,rank.n-1)+1)} / ${fmt(rank.n)}`:'0 / 0'}</span>
+                  <button className="chip" type="button" data-k="vnext" aria-label="다음 보이싱" disabled={!cur||vi>=rank.n-1} onClick={()=>setVi(i=>Math.min(rank.n-1,i+1))}>▶</button>
+                  <Chip k="pedit" v="" onPick={pick}>진행 수정</Chip>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

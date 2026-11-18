@@ -223,6 +223,50 @@ let progChecks=0;
   eq(gap.pick.map(Boolean),[true,false,true],'폼 없는 코드는 건너뜀');
 }
 
+// 7) 보이싱 순위: 가짓수, 비용 순서, 전수 정렬과 일치, 1번째는 최소 이동과 같음
+{
+  const {progressionCandidates,countVoicings,rankVoicings}=L;
+  let seed=11;
+  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
+  const qs=QUALITIES.map(q=>q.id);
+  for(let trial=0;trial<40;trial++){
+    const len=1+rnd(3);
+    const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
+    const rs=[6,5,4,3,'all'][rnd(5)],layout=['adj','skip'][rnd(2)];
+    const t=[rnd(4)>0,true,rnd(2)===0,rnd(3)>0];
+    const cands=progressionCandidates(prog,rs,t,layout);
+    const n=countVoicings(cands);
+    // 전수: 모든 조합의 비용
+    const all=[];
+    const rec=(k,prev,acc,path)=>{ if(k===cands.length){ all.push({acc,key:path.join('|')}); return; } cands[k].forEach((b,j)=>rec(k+1,b,acc+(prev&&b?moveCost(prev,b):0),[...path,j])); };
+    rec(0,null,0,[]);
+    const realAll=cands.some(c=>c[0]!==null)?all.length:0;
+    eq(n,realAll,`보이싱 ${trial}: 가짓수`);
+    if(!n) continue;
+    const r=rankVoicings(cands);
+    const sorted=all.map(x=>x.acc).sort((a,b)=>a-b);
+    const keys=new Set();
+    const lim=Math.min(n,300);
+    for(let k=0;k<lim;k++){
+      const v=r.get(k);
+      if(!v){ fails.push(`보이싱 ${trial}: ${k}번째 없음 (총 ${n})`); break; }
+      if(Math.abs(v.total-sorted[k])>1e-6) fails.push(`보이싱 ${trial}: ${k}번째 비용 ${v.total} != ${sorted[k]}`);
+      const key=v.pick.map(x=>x?x.notes.map(m=>m?m.fret:'x').join(','):'-').join('|');
+      if(keys.has(key)) fails.push(`보이싱 ${trial}: 중복`);
+      keys.add(key);
+    }
+    if(n<=300&&r.get(n)!==null) fails.push(`보이싱 ${trial}: 가짓수보다 많이 나옴`);
+    const best=planProgression(prog,rs,t,layout);
+    if(Math.abs(r.get(0).total-best.total)>1e-6) fails.push(`보이싱 ${trial}: 1번째 ${r.get(0).total} != 최소 ${best.total}`);
+  }
+  // 큰 진행도 앞쪽은 빠르게 나온다
+  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',[true,true,true,true],'adj');
+  const rb=rankVoicings(big);
+  let last=-1;
+  for(let k=0;k<200;k++){ const v=rb.get(k); if(v.total<last-1e-9) fails.push('큰 진행: 비용 순서'); last=v.total; }
+  if(!(countVoicings(big)>1e6)) fails.push('큰 진행 가짓수 '+countVoicings(big));
+}
+
 console.log(`진행 ${progChecks}개 검사`);
 console.log(`조합 ${combos}개 (폼 없는 조합 ${impossible}개) 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }

@@ -123,8 +123,40 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   t.click('root','7'); t.click('q','7'); t.click('padd','');
   t.click('root','0'); t.click('q','maj7'); t.click('padd','');
   assert.deepEqual(t.state().prog,[{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}]);
+  // 진행을 다 고르기 전에는 결과가 없다
+  assert.equal(t.svgs(),0);
+  assert.match(t.container.querySelector('.cards').textContent,/보이싱 찾기/);
+  assert.match(t.count(),/코드 3개/);
+  // 보이싱 찾기 → 가짓수와 1번째(손 이동 최소)
+  t.click('pfind','');
   assert.equal(t.svgs(),3);
-  assert.match(t.count(),/총 손 이동/);
+  assert.match(t.container.querySelector('.vcount').textContent,/가능한 보이싱 216가지/);
+  assert.equal(t.container.querySelector('.vpos').textContent,'1 / 216');
+  assert.match(t.count(),/1번째 · 총 손 이동/);
+  assert.equal(t.container.querySelector('.picker'),null);
+  const prevBtn=t.container.querySelector('button[data-k="vprev"]'),nextBtn=t.container.querySelector('button[data-k="vnext"]');
+  assert.equal(prevBtn.disabled,true);
+  const first=t.container.querySelector('.cards').innerHTML;
+  fireEvent.click(nextBtn);
+  assert.equal(t.container.querySelector('.vpos').textContent,'2 / 216');
+  assert.notEqual(t.container.querySelector('.cards').innerHTML,first);
+  fireEvent.click(prevBtn);
+  assert.equal(t.container.querySelector('.cards').innerHTML,first);
+  // 이동은 순위대로 늘어난다 (1번째 ≤ 2번째 ≤ … )
+  let last=-1;
+  for(let i=0;i<20;i++){
+    const m=Number(t.count().match(/총 손 이동 (\d+)프렛/)[1]);
+    assert.ok(m>=last-1,`순위 ${i+1}: 이동 ${m}`); last=Math.max(last,m);
+    fireEvent.click(t.container.querySelector('button[data-k="vnext"]'));
+  }
+  // 설정을 바꾸면 1번째로 돌아간다
+  t.click('rs','all');
+  assert.match(t.container.querySelector('.vpos').textContent,/^1 \//);
+  // 진행 수정 → 다시 고르기 화면
+  t.click('pedit','');
+  assert.equal(t.state().progDone,false);
+  assert.equal(t.svgs(),0);
+  t.click('rs','4');
   // 진행 화면의 선택 칸
   const [selRoot,selQ]=t.container.querySelectorAll('.picker select');
   fireEvent.change(selRoot,{target:{value:'5'}});
@@ -132,15 +164,22 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   t.click('padd','');
   assert.deepEqual(t.state().prog[3],{root:5,q:'maj7'});
   assert.deepEqual([t.state().root,t.state().q],[5,'maj7']);
-  t.click('pdel','3'); t.click('pdel','1');
+  t.click('pfind',''); assert.equal(t.state().progDone,true);
+  t.click('pdel','3');
+  assert.equal(t.state().progDone,false,'진행을 바꾸면 결과를 닫는다');
+  t.click('pdel','1');
   assert.deepEqual(t.state().prog,[{root:2,q:'m7'},{root:0,q:'maj7'}]);
   for(let i=0;i<10;i++) fireEvent.click(t.btn('padd',''));
   assert.equal(t.state().prog.length,8);
   assert.equal(t.btn('padd','').disabled,true);
+  t.click('pfind','');
+  assert.ok(t.svgs()>0);
   const saved=JSON.stringify(t.state());
   cleanup();
   const b=boot(saved);
-  assert.equal(b.state().prog.length,8); assert.equal(b.state().mode,'prog');
+  assert.equal(b.state().prog.length,8); assert.equal(b.state().mode,'prog'); assert.equal(b.state().progDone,true);
+  assert.ok(b.svgs()>0,'저장된 결과 화면 복원');
+  b.click('pedit','');
   b.click('pclear','');
   assert.deepEqual(b.state().prog,[]);
   b.click('mode','chord');
