@@ -38,7 +38,7 @@ const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${ms
   const t=boot({});
   let seed=12345;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const groups=['#roots .chip','[data-k="q"]','[data-k="rs"]','#tsel [data-k="t"]'];
+  const groups=['#roots .chip','[data-k="q"]','[data-k="rs"]','#tsel [data-k="t"]','[data-k="lay"]'];
   let empties=0;
   for(let i=0;i<4000;i++){
     const g=groups[rnd(groups.length)];
@@ -53,6 +53,21 @@ const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${ms
   const t=boot({'fretguide.v2':JSON.stringify({root:0,q:'7',rs:1,t:[true,true,true,true]})});
   if(t.svgs()<1) fails.push('불가능한 저장값에서 빈 화면');
   eq(t.state().rs,4,'불가능한 저장값 복구');
+}
+
+// 6) 쉘: m7 4음은 5줄이 필요해 베이스 5·6만 가능, 근음만 켜면 쉘 칩은 비활성
+{
+  const t=boot({});
+  t.click('q','m7'); t.click('rs','all'); t.click('lay','skip');
+  eq(t.flags('[data-k="rs"]'),{1:true,2:true,3:true,4:true,5:false,6:false,all:false},'쉘 4음: 베이스 버튼 상태');
+  t.click('lay','adj'); t.click('t',1); t.click('t',2); t.click('t',3);
+  eq(t.state().t,[true,false,false,false],'근음만 켬');
+  eq(t.flags('[data-k="lay"]').skip,true,'1음에서는 쉘 비활성');
+}
+// 7) 불가능한 쉘 저장값은 붙여서로 복구된다
+{
+  const t=boot({'fretguide.v2':JSON.stringify({root:0,q:'maj',rs:1,t:[true,true,true,false],layout:'skip'})});
+  if(t.svgs()<1) fails.push('불가능한 쉘 저장값에서 빈 화면');
 }
 
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }

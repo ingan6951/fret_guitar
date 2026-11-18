@@ -13,7 +13,8 @@ function boot(initialStore){
     '#roots .chip':['root',Array.from({length:12},(_,i)=>String(i))],
     '[data-k="q"]':['q',['maj','min','7','maj7','m7']],
     '[data-k="rs"]':['rs',['1','2','3','4','5','6','all']],
-    '#tsel [data-k="t"]':['t',['0','1','2','3']]
+    '#tsel [data-k="t"]':['t',['0','1','2','3']],
+    '[data-k="lay"]':['lay',['adj','skip']]
   };
   let handler=null;
   const document={

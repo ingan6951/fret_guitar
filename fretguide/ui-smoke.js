@@ -17,9 +17,12 @@ let n=0;
             const want=!!(mask&(1<<i));
             if(t.state().t[i]!==want) t.click('t',i);
           });
-          ['1','2','3','4','5','6','all'].forEach(rs=>{
-            t.click('rs',rs);
-            for(let r=0;r<12;r++){ t.click('root',r); n++; }
+          ['adj','skip'].forEach(lay=>{
+            t.click('lay',lay);
+            ['1','2','3','4','5','6','all'].forEach(rs=>{
+              t.click('rs',rs);
+              for(let r=0;r<12;r++){ t.click('root',r); n++; }
+            });
           });
         }
       });
@@ -39,11 +42,12 @@ let n=0;
 // 저장 후 복원
 {
   const a=boot({});
-  a.click('root',2); a.click('q','7'); a.click('rs',5); a.click('t',0); a.click('label','degree'); a.click('acc','flat');
+  a.click('root',2); a.click('q','7'); a.click('rs',5); a.click('t',0); a.click('label','degree'); a.click('acc','flat'); a.click('lay','skip');
   const saved=a.state();
   const b=boot({'fretguide.v2':a.store['fretguide.v2']});
   eq(b.state(),saved,'저장한 설정 복원');
   eq(saved.t,[false,true,true,true],'구성음 저장');
+  eq(saved.layout,'skip','줄 배치 저장');
 }
 // 이전 버전 저장값(구성음 정보 없음)은 기본값으로 안전하게 열린다
 {

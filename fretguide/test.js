@@ -14,25 +14,46 @@ const masks=[];
 for(let m=1;m<16;m++) masks.push([0,1,2,3].map(i=>!!(m&(1<<i))));
 const lowFret=res=>Math.min(...res.notes.filter(Boolean).map(n=>n.fret));
 
+// 전수 탐색용 줄 목록 (로직과 따로 만든다): 베이스부터 위로 n줄, 'skip'은 사이에 빈 줄이 정확히 하나
+function refStrings(b,n,layout){
+  const out=[];
+  const gaps=layout==='skip'?1:0;
+  const low=b-(n-1)-gaps;
+  if(n<1||low<1||(layout==='skip'&&n<2)) return out;
+  // b와 low 사이의 줄 중 빈 줄 gaps개를 고른다 (양 끝은 항상 사용)
+  const inner=[];for(let s=b-1;s>low;s--) inner.push(s);
+  const pick=(i,chosen)=>{
+    if(chosen.length===inner.length-gaps||i===inner.length){
+      if(chosen.length===inner.length-gaps) out.push([b,...chosen,low].filter((x,j,a)=>a.indexOf(x)===j));
+      return;
+    }
+    pick(i+1,[...chosen,inner[i]]);
+    pick(i+1,chosen);
+  };
+  if(n===1) out.push([b]); else pick(0,[]);
+  return out;
+}
+
 let combos=0,impossible=0;
+['adj','skip'].forEach(layout=>{
 QUALITIES.forEach(q=>{
   masks.forEach(t=>{
     const mask=maskFor(q.id,t);
-    if(!mask.length){ eq(hasForms(q.id,4,t),false,`빈 구성음 ${q.id}`); return; } // 트라이어드에서 7도만 켠 경우
+    if(!mask.length){ eq(hasForms(q.id,4,t,layout),false,`빈 구성음 ${q.id}`); return; } // 트라이어드에서 7도만 켠 경우
     [6,5,4,3,2,1,'all'].forEach(rs=>{
       const strs=rs==='all'?[6,5,4,3,2,1]:[rs];
       for(let root=0;root<12;root++){
-        const got=collect(root,q.id,rs,false,t);
-        const gotOct=collect(root,q.id,rs,true,t);
+        const got=collect(root,q.id,rs,false,t,layout);
+        const gotOct=collect(root,q.id,rs,true,t,layout);
         // 1) 모든 폼이 규칙을 지키는지
         [...got,...gotOct].forEach(res=>{
           const sounded=res.notes.filter(Boolean);
-          const tag=`${q.id} ${rs} mask=${mask} root=${root}`;
+          const tag=`${layout} ${q.id} ${rs} mask=${mask} root=${root}`;
           eq(sounded.length,mask.length,`${tag}: 음 개수`);
           eq(sounded.map(n=>(n.pc-root+12)%12).sort((a,b)=>a-b),mask.map(i=>q.tones[i]).sort((a,b)=>a-b),`${tag}: 켠 구성음을 한 줄에 하나씩`);
           const ss=sounded.map(n=>n.string);
           eq(ss,[...ss].sort((a,b)=>b-a),`${tag}: 줄 순서`);
-          if(ss[0]-ss[ss.length-1]!==ss.length-1) fails.push(`${tag}: 줄이 이어지지 않음`);
+          if(ss[0]-ss[ss.length-1]!==ss.length-1+(layout==='skip'?1:0)) fails.push(`${tag}: 줄 배치(${layout})가 맞지 않음 ${ss}`);
           if(!strs.includes(res.bass)||res.bass!==ss[0]) fails.push(`${tag}: 베이스 줄이 가장 낮은 줄이 아님`);
           const fr=sounded.map(n=>n.fret);
           if(Math.min(...fr)<0||Math.max(...fr)>MAX_FRET) fails.push(`${tag}: 프렛 범위 ${fr}`);
@@ -43,9 +64,8 @@ QUALITIES.forEach(q=>{
         const want=new Set();
         strs.forEach(b=>{
           const n=mask.length;
-          if(b-n+1<1) return;
           const pcs=mask.map(i=>(root+q.tones[i])%12);
-          const strings=[];for(let k=0;k<n;k++) strings.push(b-k);
+          refStrings(b,n,layout).forEach(strings=>{
           const rec=(k,frets,used)=>{
             if(k===n){
               if(Math.max(...frets)-Math.min(...frets)<=MAX_SPAN){
@@ -63,18 +83,20 @@ QUALITIES.forEach(q=>{
             }
           };
           rec(0,[],0);
+          });
         });
         const have=new Set();
         [...got,...gotOct].forEach(res=>have.add(`${res.bass}:${res.notes.map(n=>n?n.fret:null).join(',')}`));
         const missing=[...want].filter(x=>!have.has(x)),extra=[...have].filter(x=>!want.has(x));
-        if(missing.length||extra.length) fails.push(`${q.id} ${rs} mask=${mask} root=${root}: 전수 탐색과 불일치 (빠짐 ${missing.length}, 초과 ${extra.length}) ${missing[0]||extra[0]}`);
+        if(missing.length||extra.length) fails.push(`${layout} ${q.id} ${rs} mask=${mask} root=${root}: 전수 탐색과 불일치 (빠짐 ${missing.length}, 초과 ${extra.length}) ${missing[0]||extra[0]}`);
       }
       // 3) hasForms는 근음과 무관하게 실제 결과와 일치
-      const any=collect(0,q.id,rs,false,t).length>0;
-      eq(hasForms(q.id,rs,t),any,`hasForms ${q.id} ${rs} mask=${mask}`);
+      const any=collect(0,q.id,rs,false,t,layout).length>0;
+      eq(hasForms(q.id,rs,t,layout),any,`hasForms ${layout} ${q.id} ${rs} mask=${mask}`);
       combos++; if(!any) impossible++;
     });
   });
+});
 });
 
 // 4) 알려진 값 (C 근음)
@@ -98,6 +120,18 @@ QUALITIES.forEach(q=>{
   eq(collect(0,'maj',4,false,[true,true,true,true]).length,collect(0,'maj',4,false,[true,true,true,false]).length,'트라이어드는 7도 토글 무시');
   // 7도만 켠 트라이어드는 폼이 없다
   eq(hasForms('maj',4,[false,false,false,true]),false,'트라이어드에서 7도만 켬');
+  // 쉘: C7, 6번 줄 베이스 R–♭7–3 → 6번 줄 8, 5번 줄 뮤트, 4번 줄 8, 3번 줄 9
+  const shell=collect(0,'7',6,false,[true,true,false,true],'skip');
+  const s1=shell.find(r=>r.formName==='R–♭7–3');
+  eq(s1&&s1.notes.map(n=>n?n.fret:null),[8,null,8,9,null,null],'C7 쉘 R–♭7–3 (6번 줄)');
+  // 쉘: Cmaj7, 5번 줄 베이스 R–7–3 → 5번 줄 3, 4번 줄 뮤트, 3번 줄 4, 2번 줄 5
+  const s2=collect(0,'maj7',5,false,[true,true,false,true],'skip').find(r=>r.formName==='R–7–3');
+  eq(s2&&s2.notes.map(n=>n?n.fret:null),[null,3,null,4,5,null],'Cmaj7 쉘 R–7–3 (5번 줄)');
+  // 1음은 건너뛸 줄이 없어 쉘 폼이 없다
+  eq(hasForms('maj',6,[true,false,false,false],'skip'),false,'1음 쉘');
+  // 바레는 치지 않는 줄을 가로지르지 않는다
+  const mk=(st,fr,fi)=>({string:st,fret:fr,finger:fi});
+  eq(barres([null,mk(5,3,1),null,mk(3,3,1),mk(2,3,1),null]),[{fret:3,top:2,bottom:3}],'바레가 뮤트 줄을 건너지 않음');
 }
 
 // 5) 바레 계산이 모든 결과에서 깨지지 않는다
@@ -105,7 +139,7 @@ for(const q of QUALITIES){
   for(const t of masks){
     for(const rs of [6,4,1,'all']){
       for(const root of [0,4,9]){
-        collect(root,q.id,rs,false,t).forEach(r=>{ barres(r.notes); });
+        ['adj','skip'].forEach(l=>collect(root,q.id,rs,false,t,l).forEach(r=>{ barres(r.notes); }));
       }
     }
   }
