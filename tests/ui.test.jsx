@@ -86,7 +86,7 @@ test('아무렇게나 눌러도(비활성은 무시) 빈 화면에 닿지 않는
   const t=boot();
   let seed=12345;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const keys=['root','q','rs','t','label','acc'];
+  const keys=['root','q','rs','t','fmin','label','acc'];
   for(let i=0;i<600;i++){
     const k=keys[rnd(keys.length)];
     const s=t.container.querySelector(`select[data-k="${k}"]`);
@@ -294,4 +294,27 @@ test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 �
   t.click('t','1'); t.click('t','2'); t.click('t','3'); t.click('rs','4');
   assert.equal(t.svgs(),1);
   assert.equal(t.container.querySelector('.slidenav'),null);
+});
+
+test('프렛 하한: 고르면 그 프렛 이상만 잡는 폼만 나오고, 폼이 없는 선택지는 비활성',()=>{
+  const t=boot();
+  assert.equal(t.state().fmin,0);
+  assert.equal(t.flags('fmin')['0'],false);
+  t.click('fmin','5');
+  assert.equal(t.state().fmin,5);
+  assert.ok(t.svgs()>0);
+  // 소리 나는 모든 음이 5프렛 이상이므로 기준 음 프렛(.pos)도 5 이상이고 개방현은 없다
+  for(const pos of t.container.querySelectorAll('.cards .pos')) assert.ok(parseInt(pos.textContent,10)>=5,`위치 ${pos.textContent}`);
+  assert.match(t.container.querySelector('.adv summary span').textContent,/5프렛 이상/);
+  // 하한을 켜면 한 옥타브 위로 버튼은 의미가 없어 숨긴다
+  assert.equal(t.container.querySelector('button[data-k="oct"]'),null);
+  // 저장·복원
+  const saved=JSON.stringify(t.state());
+  cleanup();
+  const b=boot(saved);
+  assert.equal(b.state().fmin,5);
+  // 불가능해진 저장값(폼이 없는 하한)은 전체로 돌아간다
+  cleanup(); localStorage.clear();
+  const c=boot({root:0,q:'m7',rs:6,t:[true,true,true,true],fmin:12});
+  assert.ok(c.svgs()>0);
 });

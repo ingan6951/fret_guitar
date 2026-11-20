@@ -318,6 +318,32 @@ let progChecks=0;
   }
 }
 
+// 프렛 하한(minFret): 소리 나는 모든 음이 하한 이상인 폼만, 기본 위치와 한 옥타브 위 위치를 모두 후보로
+{
+  const {hasFormsAt}=L;
+  let seed=4242,checked=0;
+  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
+  const keyOf=r=>`${r.bass}:`+r.notes.map(n=>n?n.fret:'x').join(',');
+  for(let trial=0;trial<400;trial++){
+    const q=QUALITIES[rnd(QUALITIES.length)],t=masks[rnd(masks.length)];
+    if(!maskFor(q.id,t).length) continue;
+    const rs=[6,5,4,3,2,1,'all'][rnd(7)],layout=['adj','skip','any'][rnd(3)],root=rnd(12),minFret=[1,2,3,5,8,12][rnd(6)];
+    const want=new Set();
+    [false,true].forEach(oct=>collect(root,q.id,rs,oct,t,layout).forEach(r=>{
+      if(r.notes.every(n=>!n||n.fret>=minFret)) want.add(keyOf(r));
+    }));
+    const got=collect(root,q.id,rs,false,t,layout,minFret);
+    const gotKeys=new Set(got.map(keyOf));
+    got.forEach(r=>{ if(r.notes.some(n=>n&&n.fret<minFret)) fails.push(`프렛 하한 ${minFret} 위반 ${keyOf(r)}`); });
+    eq([...gotKeys].sort(),[...want].sort(),`프렛 하한 ${minFret} ${q.id} ${rs} ${layout} root=${root} ${maskFor(q.id,t)}`);
+    eq(hasFormsAt(root,q.id,rs,t,layout,minFret),want.size>0,`hasFormsAt ${minFret}`);
+    checked++;
+  }
+  // 하한 0은 기존과 같다
+  eq(collect(9,'m7',4,false,[true,true,true,true],'any',0).length,collect(9,'m7',4,false,[true,true,true,true],'any').length,'하한 0');
+  console.log(`프렛 하한 ${checked}개 검사`);
+}
+
 // 진행의 줄 배치 자동 선택
 {
   const {autoLayout,progressionCandidates,rankVoicings,isShell}=L;

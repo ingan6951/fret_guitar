@@ -163,3 +163,4 @@ h1,h2,p{margin:0}
   .cards.one>*,.cards.solo>*{flex-basis:100%}
   .cards:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:12px}
 }
+.adv>summary b{white-space:nowrap;flex:0 0 auto}

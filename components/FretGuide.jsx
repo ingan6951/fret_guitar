@@ -1,8 +1,8 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout} from '../lib/fretlogic.js';
-import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt} from '../lib/fretlogic.js';
+import {DEFAULT,MAX_PROG,FRET_MINS,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']];
@@ -54,18 +54,19 @@ export default function FretGuide(){
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
       case 'pedit': return {...s,progDone:false};
       case 'pn': return {...s,progN:Number(v)};
+      case 'fmin': return {...s,fmin:Number(v)};
       default: return s;
     }
   });
 
-  const {root,q:qid,rs,t,label,flat,octave,mode,prog,progDone,progN}=state;
+  const {root,q:qid,rs,t,fmin,label,flat,octave,mode,prog,progDone,progN}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
   const isProg=mode==='prog';
 
-  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any'),[isProg,root,qid,rs,octave,t]);
+  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any',fmin),[isProg,root,qid,rs,octave,t,fmin]);
   // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
   const showResult=isProg&&progDone&&prog.length>0;
   const selOk=sel!==null&&sel<prog.length?sel:null;
@@ -80,10 +81,10 @@ export default function FretGuide(){
   const rank=useMemo(()=>{
     if(!showResult) return null;
     // 줄 배치는 진행에 맞게 자동으로 정한다 (붙여서 우선, 쉘을 섞어야 이동이 줄 때만 쉘 포함)
-    const lay=autoLayout(prog,rs,progN);
-    const c=progressionCandidates(prog,rs,progN,lay);
+    const lay=autoLayout(prog,rs,progN,fmin);
+    const c=progressionCandidates(prog,rs,progN,lay,fmin);
     return {n:countVoicings(c),list:rankVoicings(c),lay};
-  },[showResult,prog,rs,progN]);
+  },[showResult,prog,rs,progN,fmin]);
   useEffect(()=>{ setVi(0); },[rank]);
   const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
   const fmt=n=>n.toLocaleString('ko-KR');
@@ -91,27 +92,31 @@ export default function FretGuide(){
   const cardsRef=useRef(null);
   const [ci,setCi]=useState(0);
   useEffect(()=>{ const el=cardsRef.current; if(el&&el.scrollTo) el.scrollTo({left:0,behavior:'auto'}); setCi(0); },[list,cur,showResult,isProg]);
-  const needOct=!isProg&&list.some(r=>r.canOctave);
+  const needOct=!isProg&&fmin===0&&list.some(r=>r.canOctave);
 
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
   // 진행 보기에서는 구성음 대신 음 개수(progN)로 판단한다
-  const has=(id,r)=>isProg?hasFormsN(id,r,progN,'any'):hasForms(id,r,t,'any');
+  // 프렛 하한이 있으면 근음에 따라 폼 유무가 달라지므로 근음도 함께 넘긴다
+  const hasAt=(rt,id,r,tt,fm)=>isProg?hasFormsNAt(rt,id,r,progN,'any',fm):hasFormsAt(rt,id,r,tt,'any',fm);
+  const has=(id,r)=>hasAt(root,id,r,t,fmin);
+  const rootOff=i=>i!==root&&!hasAt(i,qid,rs,t,fmin);
   const qOff=id=>id!==qid&&!has(id,rs);
   const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v));
-  const pnOff=n=>n!==progN&&!hasFormsN(qid,rs,n,'any');
+  const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
+  const fretOff=n=>n!==fmin&&!hasAt(root,qid,rs,t,n);
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
-  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasForms(qid,rs,next,'any'); };
+  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasFormsAt(root,qid,rs,next,'any',fmin); };
 
   const presetOff=p=>{
     const pt=presetT(p,q);
     if(pt.filter(Boolean).length<(p.min||1)) return true;
     const same=JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,pt));
-    return !same&&!hasForms(qid,rs,pt,'any');
+    return !same&&!hasFormsAt(root,qid,rs,pt,'any',fmin);
   };
   const presetOn=p=>JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,presetT(p,q)));
   // 접어 둔 상세 조건에 현재 값을 한 줄로 보여 준다
   const advSummary=(isProg?`${progN}음`:`구성음 ${maskFor(qid,t).map(i=>degName(q.deg[i])).join('·')}`)
-    +` · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`;
+    +` · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`+(fmin?` · ${fmin}프렛 이상`:'');
 
   const stepOf=el=>el.children.length>1?el.children[1].offsetLeft-el.children[0].offsetLeft:el.clientWidth;
   const slide=d=>{
@@ -185,7 +190,7 @@ export default function FretGuide(){
           <div className="group">
             <h2 id="h-root">근음</h2>
             <select className="sel" data-k="root" aria-labelledby="h-root" value={String(root)} onChange={e=>pick('root',e.target.value)}>
-              {nm.map((n,i)=><option key={i} value={String(i)}>{NOTE_SHARP[i]!==NOTE_FLAT[i]?`${n} (${flat?NOTE_SHARP[i]:NOTE_FLAT[i]})`:n}</option>)}
+              {nm.map((n,i)=><option key={i} value={String(i)} disabled={rootOff(i)}>{NOTE_SHARP[i]!==NOTE_FLAT[i]?`${n} (${flat?NOTE_SHARP[i]:NOTE_FLAT[i]})`:n}</option>)}
             </select>
           </div>
           <div className="group">
@@ -225,6 +230,12 @@ export default function FretGuide(){
             <div className="seg row7" role="group" aria-labelledby="h-rs">
               {RS.map(([v,l])=><Chip key={v} k="rs" v={v} on={String(rs)===v} disabled={rsOff(v)} onPick={pick}>{l}</Chip>)}
             </div>
+          </div>
+          <div className="group">
+            <h2 id="h-fret">프렛</h2>
+            <select className="sel" data-k="fmin" aria-labelledby="h-fret" value={String(fmin)} onChange={e=>pick('fmin',e.target.value)}>
+              {FRET_MINS.map(n=><option key={n} value={String(n)} disabled={fretOff(n)}>{n===0?'전체':`${n}프렛 이상`}</option>)}
+            </select>
           </div>
           </div>
         </details>
