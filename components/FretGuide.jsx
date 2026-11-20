@@ -307,6 +307,7 @@ export default function FretGuide(){
           </div>
         )}
 
+        <p className="advline">{advSummary}</p>
         <p className="count">{count}</p>
         {nCards>1&&(
           <div className="slidenav" role="group" aria-label="폼 넘기기">
