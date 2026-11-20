@@ -29,6 +29,7 @@ export default function FretGuide(){
       // 근음을 바꿨는데 지금 코드 종류가 그 근음에 없으면, 있는 종류로 바꾼다
       case 'root': { const r=Number(v); const q2=hasChord(r,s.q)?s.q:(QUALITIES.find(x=>hasChord(r,x.id))||{id:s.q}).id; return {...s,root:r,q:q2}; }
       case 'q': return {...s,q:v};
+      case 'n': return {...s,n:Number(v)};
       case 'label': return {...s,label:v};
       case 'acc': return {...s,flat:v==='flat'};
       case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v))};
@@ -37,7 +38,7 @@ export default function FretGuide(){
     }
   });
 
-  const {root,q:qid,label,flat,prog}=state;
+  const {root,q:qid,n,label,flat,prog}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
@@ -49,7 +50,7 @@ export default function FretGuide(){
   const viewAll=showAll&&prog.length>0;
 
   // 이 코드의 폼 (데이터에 적힌 것만)
-  const list=useMemo(()=>formsFor(root,qid),[root,qid]);
+  const list=useMemo(()=>formsFor(root,qid,n),[root,qid,n]);
 
   // 칩을 누르면 그 자리가 선택되고(코드도 불러옴) 다시 누르면 풀린다. 선택하면 그 자리를 다시 고르는 상태가 된다.
   const choose=i=>{
@@ -167,6 +168,13 @@ export default function FretGuide(){
           <h2 id="h-qual">코드</h2>
           <select className="sel" data-k="q" aria-labelledby="h-qual" value={qid} onChange={e=>pick('q',e.target.value)}>
             {QUALITIES.map(x=><option key={x.id} value={x.id} disabled={qOff(x.id)}>{x.label}</option>)}
+          </select>
+        </div>
+        <div className="row">
+          <h2 id="h-n">음 개수</h2>
+          <select className="sel" data-k="n" aria-labelledby="h-n" value={String(n)} onChange={e=>pick('n',e.target.value)}>
+            <option value="0">전체</option>
+            {[1,2,3,4,5].map(k=><option key={k} value={String(k)}>{k}개 (이웃한 줄)</option>)}
           </select>
         </div>
       </section>

@@ -41,9 +41,9 @@ test('처음 화면: Am 폼 하나, 개방 위치, 5번 줄 베이스',()=>{
   assert.equal(svg.querySelectorAll('.mute').length,1);
 });
 
-test('조건은 근음·코드 두 개뿐이고 묶음·진행 추가 버튼·캡션은 없다',()=>{
+test('조건은 근음·코드·음 개수뿐이고 묶음·진행 추가 버튼·캡션은 없다',()=>{
   const t=boot();
-  assert.deepEqual([...t.container.querySelectorAll('.rail .row h2')].map(x=>x.textContent),['근음','코드']);
+  assert.deepEqual([...t.container.querySelectorAll('.rail .row h2')].map(x=>x.textContent),['근음','코드','음 개수']);
   for(const k of ['top','pnstep','rstep','fstep','mode','pfind','oct']) assert.equal(t.container.querySelector(`[data-k="${k}"]`),null,k);
   assert.equal(t.container.querySelector('.adv'),null);
   assert.equal(t.container.querySelector('.hint'),null);
@@ -78,6 +78,16 @@ test('근음·코드는 데이터에 있는 것만 고를 수 있고, 근음을 
   assert.deepEqual([t.state().root,t.state().q],[7,'maj']);
   t.click('root','2'); t.click('q','min');
   assert.equal(t.container.querySelector('.sym').textContent,'Dm');
+});
+
+test('음 개수: D를 2개로 고르면 이웃한 두 줄 폼 3가지',()=>{
+  const t=boot({root:2,q:'maj'});
+  assert.equal(t.svgs(),1);
+  t.click('n','2');
+  assert.equal(t.svgs(),3);
+  assert.match(t.count(),/폼 3개/);
+  t.click('n','0');
+  assert.equal(t.svgs(),1);
 });
 
 test('표시 방식: 음이름·도수',()=>{

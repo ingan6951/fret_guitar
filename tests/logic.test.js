@@ -1,6 +1,7 @@
 // 코드 폼 데이터 검증. lib/chords.js의 데이터가 이미지(오픈 코드)와 같고, 화면용 변환이 맞는지 본다.
 import {CHORDS} from '../lib/chords.js';
 import * as L from '../lib/fretlogic.js';
+import A from "node:assert/strict";
 const {QUALITIES,OPEN,voicingFromFrets,fretsOf,handPos,moveCost,formsFor,hasChord,windowStart,NOTE_SHARP}=L;
 
 const fails=[];
@@ -50,7 +51,7 @@ CHORDS.forEach(c=>{
   eq(bar.baseFret,5,'바레 위치'); eq(handPos(bar),5,'손 위치');
   // 저장한 운지에서 그대로 되살아난다
   CHORDS.forEach(c=>{ const r=formsFor(c.root,c.q)[0]; eq(fretsOf(r),c.frets,`${nameOf(c)} 운지 왕복`); eq(r,voicingFromFrets(c.root,c.q,fretsOf(r)),`${nameOf(c)} 복원`); });
-  eq(formsFor(0,'min'),[],'데이터에 없는 코드는 폼이 없다'); eq(hasChord(0,'min'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
+  eq(L.formsFor(0,'min'),[],'데이터에 없는 코드는 폼이 없다'); eq(hasChord(0,'min'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
   // 창 시작: 5프렛 안이면 1, 넘으면 가장 낮은 프렛
   eq(windowStart(am.notes),1,'Am 창'); eq(windowStart(bar.notes),5,'바레 창');
 }
@@ -68,3 +69,14 @@ CHORDS.forEach(c=>{
 console.log(`코드 ${CHORDS.length}개 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }
 console.log('모든 검사 통과');
+
+// 음 개수: 이웃한 줄만 친 폼
+{
+  const asStr=f=>f.map(x=>x===null?'x':x).join('');
+  const d2=L.formsFor(2,'maj',2).map(r=>asStr(L.fretsOf(r)));
+  A.deepEqual(d2,['xx02xx','xxx23x','xxxx32'],'D 2개');
+  A.equal(L.formsFor(2,'maj',0).length,1,'전체는 원래 폼 하나');
+  A.equal(L.formsFor(2,'maj',9).length,1,'줄 수가 더 많으면 전체 폼');
+  A.equal(L.formsFor(4,'min',3).length,4,'Em 6줄 중 이웃한 3줄 4가지');
+  console.log('음 개수 검사 통과');
+}
