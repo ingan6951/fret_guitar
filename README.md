@@ -8,7 +8,7 @@
 ```js
 {root:4, q:'min', frets:[0,2,2,0,0,0]} // Em
 ```
-`root`는 0=C … 11=B, `q`는 `maj`·`min`·`7`·`m7`·`maj7`·`sus4`·`sus2`·`add9` (`lib/fretlogic.js`의 `QUALITIES`). 새 코드 종류는 `QUALITIES`에 구성음을 먼저 추가합니다.
+`root`는 0=C … 11=B, `q`는 `maj`·`min`·`7`·`m7`·`maj7`·`sus4`·`sus2`·`add9`·`6`·`m6`·`9`·`m9`·`maj9`·`7sus4`·`7b9`·`7s9`·`mmaj7`·`69`·`13`·`dim`·`dim7`·`m7b5`·`aug`·`5` (`lib/fretlogic.js`의 `QUALITIES`). 새 코드 종류는 `QUALITIES`에 구성음을 먼저 추가합니다.
 
 ## 진행
 폼 카드 오른쪽 위 `+`로 진행에 담고, 다음 코드를 고르면 이전 폼과 손 이동이 적은 순으로 정렬됩니다. 칩을 눌러 ↺로 교체, 제거할 수 있습니다.

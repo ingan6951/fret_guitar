@@ -30,9 +30,9 @@ for(const [q,shape,low] of [['maj','E',0],['min','E',0],['maj','A',1],['min','A'
   }
 }
 eq(CHORDS.slice(8,52).map(c=>JSON.stringify(c)).sort(),moved.map(c=>JSON.stringify(c)).sort(),'프렛을 올린 폼 44개');
-eq(CHORDS.length,179,'코드 폼 개수 (오픈 8 + 바레 44 + 7·m7·maj7·sus4·sus2·add9 127)');
+eq(CHORDS.length,443,'코드 폼 개수 (오픈 8 + 바레 44 + 7·m7·maj7·sus4·sus2·add9 127 + 나머지 종류 264)');
 // 12개 근음 모두 Major·minor·7·m7·maj7·sus4·sus2가 있다 (add9는 오픈 폼만 있어 일부 근음)
-for(let r=0;r<12;r++) for(const q of ['7','m7','maj7','sus4','sus2']) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
+for(let r=0;r<12;r++) for(const q of QUALITIES.map(x=>x.id).filter(x=>x!=='add9')) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
 for(let r=0;r<12;r++) for(const q of ['maj','min']) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
 
 // 2) 음악적으로 맞는지: 소리 나는 음이 모두 코드 구성음이고 근음·3도·5도가 다 들어 있다
@@ -44,8 +44,8 @@ CHORDS.forEach(c=>{
   if([...ivs].some(iv=>!q.tones.includes(iv))) fails.push(`${n}: 구성음이 아닌 음`);
   if(!q.tones.every(iv=>ivs.has(iv))) fails.push(`${n}: 구성음이 빠짐`);
   // 가장 낮은 소리가 나는 줄 뒤로는 끊김 없이 이어진다(뮤트는 베이스 아래쪽 줄만)
-  const first=c.frets.findIndex(f=>f!==null);
-  if(c.frets.slice(first).some(f=>f===null)) fails.push(`${n}: 중간에 뮤트`);
+  const first=c.frets.findIndex(f=>f!==null),last=c.frets.length-1-[...c.frets].reverse().findIndex(f=>f!==null);
+  if(c.frets.slice(first,last+1).some(f=>f===null)) fails.push(`${n}: 중간에 뮤트`);
   if(CHORDS.indexOf(c)<8&&Math.max(...c.frets.filter(f=>f!==null))>4) fails.push(`${n}: 오픈 코드가 아님`);
 });
 
