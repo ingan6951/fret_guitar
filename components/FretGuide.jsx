@@ -1,14 +1,11 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,collectN,handPos,moveCost,isShell,hasFormsNAt,hasTopAt,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
-import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
+import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
-const RS_ORDER=['all',1,2,3,4,5,6]; // 베이스 스테퍼 순서: 전체 → 1번 줄 … 6번 줄
-const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
-const degName=d=>d==='R'?'1':d;
-const NC_MAX=6;
+const LABELS=[['note','음이름'],['degree','도수']];
 const keyOf=(root,qid,frets)=>`${root}${qid}:${frets.map(f=>f===null?'x':f).join(',')}`;
 
 function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
@@ -29,36 +26,30 @@ export default function FretGuide(){
 
   const pick=(k,v)=>setState(s=>{
     switch(k){
-      case 'root': return {...s,root:Number(v)};
+      // 근음을 바꿨는데 지금 코드 종류가 그 근음에 없으면, 있는 종류로 바꾼다
+      case 'root': { const r=Number(v); const q2=hasChord(r,s.q)?s.q:(QUALITIES.find(x=>hasChord(r,x.id))||{id:s.q}).id; return {...s,root:r,q:q2}; }
       case 'q': return {...s,q:v};
-      case 'rs': return {...s,rs:v==='all'?'all':Number(v)};
       case 'label': return {...s,label:v};
       case 'acc': return {...s,flat:v==='flat'};
-      case 'oct': return {...s,octave:!s.octave};
-      case 'top': return {...s,top:v===''?null:Number(v)};
-      case 'pnstep': return {...s,nc:Math.max(1,Math.min(NC_MAX,s.nc+Number(v)))};
-      case 'fstep': return {...s,fmin:Math.max(0,Math.min(FRET_MAX,s.fmin+Number(v)))};
       case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v))};
       case 'pclear': return {...s,prog:[]};
       default: return s;
     }
   });
 
-  const {root,q:qid,rs,fmin,label,flat,octave,nc,top,prog}=state;
+  const {root,q:qid,label,flat,prog}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
 
   // 진행에 담은 폼은 운지째로 보관한다 (조건을 바꿔도 그대로)
-  const resolved=useMemo(()=>prog.map(e=>voicingFromFrets(e.root,e.q,e.frets,e.base)),[prog]);
+  const resolved=useMemo(()=>prog.map(e=>voicingFromFrets(e.root,e.q,e.frets)),[prog]);
   const selOk=sel!==null&&sel<prog.length?sel:null;
   const viewAll=showAll&&prog.length>0;
 
-  // 하이톤: 지금 조건으로 그 음이 맨 위인 폼이 있어야 고를 수 있다
-  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,nc,'any',fmin,i);
-  const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
-  const list=useMemo(()=>collectN(root,qid,rs,octave,nc,'any',fmin,topEff),[root,qid,rs,octave,nc,fmin,topEff]);
+  // 이 코드의 폼 (데이터에 적힌 것만)
+  const list=useMemo(()=>formsFor(root,qid),[root,qid]);
 
   // 칩을 누르면 그 자리가 선택되고(코드도 불러옴) 다시 누르면 풀린다. 선택하면 그 자리를 다시 고르는 상태가 된다.
   const choose=i=>{
@@ -67,7 +58,7 @@ export default function FretGuide(){
     setSel(i);
     setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q}:s);
   };
-  const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r),base:r.baseFret});
+  const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r)});
   const addForm=r=>setState(s=>s.prog.length>=MAX_PROG?s:{...s,prog:[...s.prog,entryOf(s,r)]});
   const replaceForm=r=>{ setState(s=>s.prog[selOk]?{...s,prog:s.prog.map((e,j)=>j===selOk?entryOf(s,r):e)}:s); setSel(null); };
   const delSel=()=>{ pick('pdel',String(selOk)); setSel(null); };
@@ -98,19 +89,9 @@ export default function FretGuide(){
   const cardsRef=useRef(null);
   const [ci,setCi]=useState(0);
   useEffect(()=>{ const el=cardsRef.current; if(el&&el.scrollTo) el.scrollTo({left:0,behavior:'auto'}); setCi(0); },[shown,viewAll]);
-  const needOct=fmin===0&&list.some(r=>r.canOctave);
-
-  // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
-  // 프렛 하한이 있으면 근음에 따라 폼 유무가 달라지므로 근음도 함께 넘긴다
-  const hasAt=(rt,id,r,fm)=>hasFormsNAt(rt,id,r,nc,'any',fm);
-  const has=(id,r)=>hasAt(root,id,r,fmin);
-  const rootOff=i=>i!==root&&!hasAt(i,qid,rs,fmin);
-  const qOff=id=>id!==qid&&!has(id,rs);
-  // 베이스 스테퍼: 폼이 없는 값은 건너뛰고 가장 가까운 값으로 간다. 갈 곳이 없으면 null
-  const rsNext=d=>{ for(let i=RS_ORDER.indexOf(rs)+d;i>=0&&i<RS_ORDER.length;i+=d) if(has(qid,RS_ORDER[i])) return RS_ORDER[i]; return null; };
-  const pnOff=n=>n!==nc&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
-  // 하한을 올릴수록 폼은 줄어들기만 하므로, 다음 숫자에 폼이 없으면 + 는 막는다
-  const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,fmin+1);
+  // 데이터에 없는 근음·코드 조합은 고를 수 없게 비활성화한다 (고른 값은 그대로 둔다)
+  const rootOff=i=>!rootsWithData().includes(i);
+  const qOff=id=>id!==qid&&!hasChord(root,id);
 
   const stepOf=el=>el.children.length>1?el.children[1].offsetLeft-el.children[0].offsetLeft:el.clientWidth;
   const slide=d=>{
@@ -136,7 +117,7 @@ export default function FretGuide(){
       return (
         <figure className="card" key={i+keyOf(c.root,c.q,c.frets)}>
           <figcaption>
-            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{isShell(res)?' · 쉘':''}{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
+            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
             <div className="capr"><div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div></div>
           </figcaption>
           <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
@@ -152,7 +133,7 @@ export default function FretGuide(){
       return (
         <figure className={'card'+(cur?' cur':'')} key={keyOf(root,qid,fretsOf(res))}>
           <figcaption>
-            <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스{isShell(res)?' · 쉘':''}</span>
+            <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스</span>
               {(dPrev!==null||dNext!==null)&&<span className="move">{dPrev!==null&&`앞 ${moveText(dPrev)}`}{dPrev!==null&&dNext!==null&&' · '}{dNext!==null&&`뒤 ${moveText(dNext)}`}</span>}
               {cur&&<span className="curtag">지금 이 자리</span>}</div>
             <div className="capr">
@@ -165,8 +146,8 @@ export default function FretGuide(){
           <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
         </figure>
       );
-    }):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>음 개수나 베이스를 바꿔 보세요.</p></div>;
-    count=`폼 ${shown.length}개 · ${nc}음`+(selOk!==null?` · ${selOk+1}번째 자리를 앞뒤 폼과 가까운 순`:before?' · 이전 폼에서 가까운 순':'');
+    }):<div className="empty"><p>이 코드의 폼 데이터가 아직 없어요.</p></div>;
+    count=`폼 ${shown.length}개`+(selOk!==null?` · ${selOk+1}번째 자리를 앞뒤 폼과 가까운 순`:before?' · 이전 폼에서 가까운 순':'');
   }
 
   return (
@@ -188,37 +169,6 @@ export default function FretGuide(){
             {QUALITIES.map(x=><option key={x.id} value={x.id} disabled={qOff(x.id)}>{x.label}</option>)}
           </select>
         </div>
-        <div className="row">
-          <h2 id="h-top">하이톤</h2>
-          <select className="sel" data-k="top" aria-labelledby="h-top" value={topEff===null?'':String(topEff)} onChange={e=>pick('top',e.target.value)}>
-            <option value="">자동</option>
-            {q.tones.map((iv,i)=>(<option key={i} value={String(i)} disabled={topOff(i)}>{degName(q.deg[i])} ({nm[(root+iv)%12]})</option>))}
-          </select>
-        </div>
-        <div className="row">
-          <h2 id="h-n">음 개수</h2>
-          <div className="stepper" role="group" aria-labelledby="h-n">
-            <Chip k="pnstep" v="-1" disabled={nc<=1||pnOff(nc-1)} onPick={pick} aria-label="음 개수 줄이기">−</Chip>
-            <output className="val" aria-live="polite">{nc}</output>
-            <Chip k="pnstep" v="1" disabled={nc>=NC_MAX||pnOff(nc+1)} onPick={pick} aria-label="음 개수 늘리기">+</Chip>
-          </div>
-        </div>
-        <div className="row">
-          <h2 id="h-rs">베이스</h2>
-          <div className="stepper" role="group" aria-labelledby="h-rs">
-            <Chip k="rstep" v="-1" disabled={rsNext(-1)===null} onPick={(k,v)=>{ const n=rsNext(Number(v)); if(n!==null) pick('rs',String(n)); }} aria-label="베이스 줄 낮추기">−</Chip>
-            <output className="val" aria-live="polite">{rs==='all'?'전체':`${rs}번 줄`}</output>
-            <Chip k="rstep" v="1" disabled={rsNext(1)===null} onPick={(k,v)=>{ const n=rsNext(Number(v)); if(n!==null) pick('rs',String(n)); }} aria-label="베이스 줄 올리기">+</Chip>
-          </div>
-        </div>
-        <div className="row">
-          <h2 id="h-fret">프렛</h2>
-          <div className="stepper" role="group" aria-labelledby="h-fret">
-            <Chip k="fstep" v="-1" disabled={fmin<=0} onPick={pick} aria-label="프렛 낮추기">−</Chip>
-            <output className="val" aria-live="polite">{fmin===0?'전체':fmin}</output>
-            <Chip k="fstep" v="1" disabled={plusOff} onPick={pick} aria-label="프렛 올리기">+</Chip>
-          </div>
-        </div>
       </section>
 
       <main className="stage">
@@ -239,7 +189,6 @@ export default function FretGuide(){
                 <Chip k="acc" v="sharp" on={!flat} onPick={pick} aria-label="샤프 표기">♯</Chip>
                 <Chip k="acc" v="flat" on={flat} onPick={pick} aria-label="플랫 표기">♭</Chip>
               </div>
-              {needOct&&<Chip k="oct" v="" on={octave} onPick={pick}>한 옥타브 위로</Chip>}
             </div>
           </details>
         </div>

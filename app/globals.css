@@ -123,24 +123,19 @@ h1,h2,p{margin:0}
   .cards.one>*,.cards.solo>*{flex-basis:100%}
   .cards:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:12px}
 }
-.stepper{display:grid;grid-template-columns:64px 1fr 64px;gap:6px;align-items:center}
-.stepper .chip{min-height:48px;font-size:22px;font-weight:500}
-.stepper .val{display:flex;align-items:center;justify-content:center;min-height:48px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
 
 /* 폰: 조건 여섯 줄을 화면 아래에 고정해 엄지로 닿게 한다 */
 @media (max-width:719px){
-  .app{padding-bottom:calc(292px + env(safe-area-inset-bottom))}
+  .app{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   .rail{position:fixed;left:0;right:0;bottom:0;z-index:20;gap:6px;max-height:52vh;overflow-y:auto;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
     background:var(--ebony);border-top:1px solid var(--line);box-shadow:0 -10px 28px rgba(0,0,0,.55)}
-  .rail .sel,.rail .stepper .chip,.rail .stepper .val{min-height:40px}
-  .rail .stepper .chip{font-size:20px}
+  .rail .sel{min-height:44px}
 }
 
 
 /* 조건: 이름은 왼쪽, 입력은 오른쪽 한 열에 가지런히 */
 .rail .row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;align-items:center}
 .rail .row h2{font-size:13px}
-.rail .stepper{grid-template-columns:56px minmax(0,1fr) 56px}
 .rail{min-width:0}
 .toptag{margin-left:4px;font-size:.7em;opacity:.75}
 

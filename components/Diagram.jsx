@@ -1,5 +1,5 @@
 // 한 폼의 지판 그림 (5프렛 창)
-import {degreeOf,windowStart,barres} from '../lib/fretlogic.js';
+import {degreeOf,windowStart} from '../lib/fretlogic.js';
 
 const PAD_L=46,CELL=58,TOP=32,GAP=24,W=PAD_L+CELL*5+14,H=172;
 const WIDTHS=[1,1.2,1.6,2.1,2.7,3.3];
@@ -7,7 +7,7 @@ const WIDTHS=[1,1.2,1.6,2.1,2.7,3.3];
 export function ariaFor(res,sym){
   const parts=res.notes.map((n,i)=>{
     const s=6-i;
-    return n===null?`${s}번 줄 치지 않음`:(n.fret===0?`${s}번 줄 개방현`:`${s}번 줄 ${n.fret}프렛 ${n.finger}번 손가락`);
+    return n===null?`${s}번 줄 치지 않음`:(n.fret===0?`${s}번 줄 개방현`:`${s}번 줄 ${n.fret}프렛`);
   });
   return `${sym}, ${res.bass}번 줄 베이스 ${res.formName}, ${res.baseFret===0?'개방 위치':res.baseFret+'프렛'}. `+parts.join(', ');
 }
@@ -17,7 +17,7 @@ export default function Diagram({res,rootPc,quality,label,names,aria}){
   const X=fret=>PAD_L+(fret-start)*CELL+CELL/2;
   const Y=s=>TOP+(s-1)*GAP;
   const mx=PAD_L-22;
-  const textFor=n=>label==='finger'?n.finger:label==='note'?names[n.pc]:degreeOf(quality,n.pc-rootPc);
+  const textFor=n=>label==='note'?names[n.pc]:degreeOf(quality,n.pc-rootPc);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
       <rect x={PAD_L} y="20" width={CELL*5} height="144" rx="3" fill="var(--rosewood)"/>
@@ -36,10 +36,6 @@ export default function Diagram({res,rootPc,quality,label,names,aria}){
         ?<rect x={PAD_L-5} y="18" width="6" height="148" rx="1" className="nut"/>
         :<line x1={PAD_L} y1="20" x2={PAD_L} y2="164" className="fretline"/>}
       {[1,2,3,4,5,6].map(s=><line key={'s'+s} x1={PAD_L} y1={Y(s)} x2={PAD_L+CELL*5} y2={Y(s)} stroke={s>=4?'var(--wound)':'var(--string)'} strokeWidth={WIDTHS[s-1]}/>)}
-      {barres(res.notes).map(b=>{
-        const y1=Y(b.top)-11,y2=Y(b.bottom)+11;
-        return <rect key={`b${b.fret}-${b.top}`} x={X(b.fret)-11} y={y1} width="22" height={y2-y1} rx="11" className="barre"/>;
-      })}
       {res.notes.map((n,i)=>{
         const s=6-i,y=Y(s);
         if(n===null) return <text key={'n'+i} x={mx} y={y} className="mute">×</text>;
@@ -48,7 +44,7 @@ export default function Diagram({res,rootPc,quality,label,names,aria}){
         if(n.fret===0) return (
           <g key={'n'+i}>
             <circle cx={mx} cy={y} r="9" className={'open'+root}/>
-            {label!=='finger'&&<text x={mx} y={y} className={'ol'+root}>{t}</text>}
+            <text x={mx} y={y} className={'ol'+root}>{t}</text>
           </g>
         );
         return (
