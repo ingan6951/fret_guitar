@@ -58,8 +58,21 @@ h1,h2,p{margin:0}
 .seg.row4 .chip{min-width:0;flex-direction:column}
 .seg.row7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .seg.row7 .chip{min-width:0;padding:4px 2px}
-.wins{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px}
-.wins .chip{min-height:50px;font-size:15px;font-variant-numeric:tabular-nums}
+.wins{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.wins .chip{flex:0 0 auto;min-width:76px;min-height:50px;font-size:15px;font-variant-numeric:tabular-nums;scroll-snap-align:start}
+.adv,.set{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.adv>summary,.set>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 14px;font-size:14px;-webkit-tap-highlight-color:transparent}
+.adv>summary::-webkit-details-marker,.set>summary::-webkit-details-marker{display:none}
+.adv>summary::after{content:'▾';margin-left:auto;color:var(--steel);transition:transform .12s}
+.adv[open]>summary::after{transform:rotate(180deg)}
+.adv>summary span{color:var(--steel);font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adv>summary:focus-visible,.set>summary:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:10px}
+.advbody{display:grid;gap:16px;padding:4px 12px 14px}
+.set{align-self:end}
+.setbody{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:4px 12px 12px}
+.setbody .chip{min-height:44px;font-size:14px;flex-direction:row;font-weight:500}
+.presets .chip{min-height:40px;min-width:0;font-size:13px;font-weight:500;padding:4px 10px}
+.order{padding-bottom:2px}
 .count{font-size:13px;color:var(--steel)}
 .empty{display:grid;gap:10px;justify-items:center;grid-column:1 / -1;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:24px 16px;color:var(--steel);font-size:14px;text-align:center}
 .who{flex-wrap:wrap}
@@ -81,6 +94,7 @@ h1,h2,p{margin:0}
 .who{display:flex;align-items:baseline;gap:8px}
 .who b{font-size:16px}
 .who span{color:var(--steel);font-size:13px}
+.who .deg{color:var(--ivory)}
 .pos{font-family:var(--display);font-weight:800;font-size:15px;background:var(--brass);color:var(--ink);border-radius:999px;padding:3px 12px}
 .card svg{display:block;width:100%;height:auto}
 .hint{font-size:12px;color:var(--steel);line-height:1.5;padding:0 2px 4px}
@@ -129,18 +143,24 @@ h1,h2,p{margin:0}
       <h2 id="h-qual">코드</h2>
       <div class="seg" id="quals" role="group" aria-labelledby="h-qual"></div>
     </div>
-    <div class="group">
-      <h2 id="h-t">구성음</h2>
-      <div class="seg row4" id="tsel" role="group" aria-labelledby="h-t"></div>
-    </div>
-    <div class="group">
-      <h2 id="h-rs">베이스</h2>
-      <div class="seg row7" id="rstr" role="group" aria-labelledby="h-rs"></div>
-    </div>
-    <div class="group">
-      <h2 id="h-win">프렛 범위</h2>
-      <div class="wins" id="wins" role="group" aria-labelledby="h-win"></div>
-    </div>
+    <details class="adv" id="adv">
+      <summary><b>상세 조건</b><span id="advsum"></span></summary>
+      <div class="advbody">
+        <div class="group">
+          <h2 id="h-t">구성음</h2>
+          <div class="seg compact presets" id="presets" role="group" aria-label="구성음 프리셋"></div>
+          <div class="seg row4" id="tsel" role="group" aria-labelledby="h-t"></div>
+        </div>
+        <div class="group">
+          <h2 id="h-rs">베이스</h2>
+          <div class="seg row7" id="rstr" role="group" aria-labelledby="h-rs"></div>
+        </div>
+        <div class="group">
+          <h2 id="h-win">프렛 범위</h2>
+          <div class="wins" id="wins" role="group" aria-labelledby="h-win"></div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <main class="stage">
@@ -149,11 +169,14 @@ h1,h2,p{margin:0}
         <div class="sym" id="sym"></div>
         <div class="tones" id="tones" aria-label="구성음"></div>
       </div>
-      <div class="tools">
-        <div class="seg compact" id="labels" role="group" aria-label="표시 방식"></div>
-        <div class="seg compact" id="acc" role="group" aria-label="음 이름 표기"></div>
-        <button class="chip" id="oct" type="button" aria-pressed="false" hidden>한 옥타브 위로</button>
-      </div>
+      <details class="set">
+        <summary aria-label="설정">⚙ 설정</summary>
+        <div class="setbody">
+          <div class="seg compact" id="labels" role="group" aria-label="표시 방식"></div>
+          <div class="seg compact" id="acc" role="group" aria-label="음 이름 표기"></div>
+          <button class="chip" id="oct" type="button" aria-pressed="false" hidden>한 옥타브 위로</button>
+        </div>
+      </details>
     </div>
 
     <p class="count" id="count"></p>
@@ -338,6 +361,19 @@ function barres(notes){
   const DEFAULT={root:9,q:'m7',rs:4,label:'finger',flat:false,octave:false,win:null,t:[true,true,true,true]};
   let state=Object.assign({},DEFAULT);
 
+  // 자주 쓰는 구성음 조합. needs7은 7도가 있는 코드에서만 의미가 있다.
+  const PRESETS=[
+    {id:'all',label:'전부',t:[1,1,1,1]},
+    {id:'guide',label:'3·7',t:[0,1,0,1],needs7:true},
+    {id:'rootless',label:'근음 빼기',t:[0,1,1,1]},
+    {id:'r5',label:'근음+5',t:[1,0,1,0]}
+  ];
+  const presetT=p=>p.t.map(Boolean);
+  const presetOk=(p,q,rs)=>{
+    const qq=QUALITIES.find(x=>x.id===q);
+    return !(p.needs7&&qq.tones.length<4)&&hasForms(q,rs,presetT(p));
+  };
+
   function sanitize(s){
     const o=Object.assign({},DEFAULT);
     if(!s||typeof s!=='object') return o;
@@ -417,6 +453,7 @@ function barres(notes){
     $('#quals').innerHTML=QUALITIES.map(q=>`<button class="chip" type="button" data-k="q" data-v="${q.id}" aria-pressed="false">${q.label}</button>`).join('');
     $('#rstr').innerHTML=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']].map(([v,l])=>`<button class="chip" type="button" data-k="rs" data-v="${v}" aria-pressed="false">${l}</button>`).join('');
     $('#tsel').innerHTML=[0,1,2,3].map(i=>`<button class="chip" type="button" data-k="t" data-v="${i}" aria-pressed="false"><span>${['1','3','5','7'][i]}</span><small></small></button>`).join('');
+    $('#presets').innerHTML=PRESETS.map(p=>`<button class="chip" type="button" data-k="preset" data-v="${p.id}" aria-pressed="false">${p.label}</button>`).join('');
     $('#labels').innerHTML=[['finger','손가락'],['note','음이름'],['degree','도수']].map(([v,l])=>`<button class="chip" type="button" data-k="label" data-v="${v}" aria-pressed="false">${l}</button>`).join('');
     $('#acc').innerHTML=[['sharp','♯'],['flat','♭']].map(([v,l])=>`<button class="chip" type="button" data-k="acc" data-v="${v}" aria-pressed="false" aria-label="${v==='sharp'?'샤프 표기':'플랫 표기'}">${l}</button>`).join('');
   }
@@ -443,6 +480,12 @@ function barres(notes){
     });
     document.querySelectorAll('[data-k="label"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===state.label)));
     document.querySelectorAll('[data-k="acc"]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v==='flat')===state.flat)));
+    document.querySelectorAll('#presets [data-k="preset"]').forEach((b,i)=>{
+      const p=PRESETS[i];
+      const same=JSON.stringify(maskFor(state.q,state.t))===JSON.stringify(maskFor(state.q,presetT(p)));
+      b.setAttribute('aria-pressed',String(same));
+      b.disabled=!same&&!presetOk(p,state.q,state.rs);
+    });
     // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
     const qq=QUALITIES.find(x=>x.id===state.q);
     document.querySelectorAll('#tsel [data-k="t"]').forEach(b=>{
@@ -487,14 +530,17 @@ function barres(notes){
     oct.setAttribute('aria-pressed',String(state.octave));
     const cards=list.map(res=>{
       const pos=res.baseFret===0?'개방':res.baseFret+'프렛';
-      return `<figure class="card"><figcaption><div class="who"><b>${res.bass}번 줄 베이스</b><span>${res.formName}</span></div><div class="pos">${pos}</div></figcaption>`
+      return `<figure class="card"><figcaption><div class="who"><b>${res.bass}번 줄</b><span class="deg">${res.bassLabel} 베이스</span></div><div class="pos">${pos}</div></figcaption>`
         +diagram(res,state.root,ariaFor(res,sym))
+        +(res.count>1?`<p class="hint order">낮은 줄부터 ${res.formName}</p>`:'')
         +(res.notes.some(n=>n&&n.fret===0)?`<p class="hint">개방현이 섞인 위치에서는 손가락 번호가 이동형 폼 기준이라, 실제 개방 코드 운지와 다를 수 있어요.</p>`:'')
         +`</figure>`;
     }).join('');
     const box=$('#cards');
     box.className='cards'+(list.length===1?' solo':'');
     box.innerHTML=list.length?cards:`<div class="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>`;
+    const tn=maskFor(q.id,state.t).map(i=>['1','3','5','7'][i]).join('·');
+    $('#advsum').textContent=`구성음 ${tn} · 베이스 ${state.rs==='all'?'전체':state.rs+'번 줄'}`+(filtered?` · ${lo}–${hi}프렛`:'');
     $('#count').textContent=`폼 ${list.length}개`+` · ${maskFor(q.id,state.t).length}음`+(filtered?` · ${lo}–${hi}프렛`:'')+(fellBack?' · 선택한 범위에 폼이 없어 전체를 보여줘요':'');
   }
 
@@ -511,6 +557,7 @@ function barres(notes){
     else if(k==='rs') state.rs=v==='all'?'all':Number(v);
     else if(k==='label') state.label=v;
     else if(k==='acc') state.flat=(v==='flat');
+    else if(k==='preset'){ const p=PRESETS.find(x=>x.id===v); if(p) state.t=presetT(p); }
     else if(k==='t'){ const i=Number(v); state.t=state.t.slice(); state.t[i]=!state.t[i]; }
     else if(k==='win') state.win=v==='all'?null:Number(v);
     render();

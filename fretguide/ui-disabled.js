@@ -55,5 +55,21 @@ const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${ms
   eq(t.state().rs,4,'불가능한 저장값 복구');
 }
 
+// 6) 구성음 프리셋: 눌리고, 트라이어드에서 7도 프리셋은 비활성이며, 현재 조합과 같으면 눌림 표시
+{
+  const t=boot({});
+  t.click('q','maj');
+  eq(t.flags('#presets [data-k="preset"]'),{all:false,guide:true,rootless:false,r5:false},'트라이어드 프리셋 상태');
+  t.click('q','m7');
+  t.clickBtn(t.lists['#presets [data-k="preset"]'][1]); // 3·7
+  eq(t.state().t,[false,true,false,true],'프리셋 3·7');
+  eq(t.lists['#presets [data-k="preset"]'].map(b=>b.attrs['aria-pressed']),['false','true','false','false'],'프리셋 눌림 표시');
+  t.clickBtn(t.lists['#presets [data-k="preset"]'][2]); // 근음 빼기
+  eq(t.state().t,[false,true,true,true],'프리셋 근음 빼기');
+  if(t.svgs()<1) fails.push('프리셋 적용 후 빈 화면');
+  // 요약 줄
+  eq(t.stubs['#advsum'].textContent.startsWith('구성음 3·5·7 · 베이스 4번 줄'),true,'상세 조건 요약');
+}
+
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }
 console.log('모든 검사 통과');
