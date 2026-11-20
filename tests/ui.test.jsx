@@ -12,9 +12,13 @@ afterEach(()=>{ cleanup(); localStorage.clear(); });
 function boot(saved){
   if(saved) localStorage.setItem(STORAGE_KEY,typeof saved==='string'?saved:JSON.stringify(saved));
   const r=render(<FretGuide/>);
-  const btn=(k,v)=>r.container.querySelector(`button[data-k="${k}"][data-v="${v}"]`);
-  const flags=k=>Object.fromEntries([...r.container.querySelectorAll(`button[data-k="${k}"]`)].map(b=>[b.dataset.v,b.disabled]));
-  const click=(k,v)=>{ const b=btn(k,v); assert.ok(b,`버튼 없음 ${k}=${v}`); fireEvent.click(b); };
+  // 근음·코드는 셀렉트박스, 나머지는 버튼이다. 셀렉트의 비활성 옵션은 고를 수 없으므로 무시한다.
+  const sel=k=>r.container.querySelector(`select[data-k="${k}"]`);
+  const btn=(k,v)=>{ const s=sel(k); return s?s.querySelector(`option[value="${v}"]`):r.container.querySelector(`button[data-k="${k}"][data-v="${v}"]`); };
+  const flags=k=>{ const s=sel(k); return s
+    ?Object.fromEntries([...s.querySelectorAll('option')].map(o=>[o.value,o.disabled]))
+    :Object.fromEntries([...r.container.querySelectorAll(`button[data-k="${k}"]`)].map(b=>[b.dataset.v,b.disabled])); };
+  const click=(k,v)=>{ const b=btn(k,v); assert.ok(b,`버튼 없음 ${k}=${v}`); const s=sel(k); if(s){ if(!b.disabled) fireEvent.change(s,{target:{value:String(v)}}); } else fireEvent.click(b); };
   const svgs=()=>r.container.querySelectorAll('.cards svg').length;
   const state=()=>JSON.parse(localStorage.getItem(STORAGE_KEY));
   const count=()=>r.container.querySelector('.count').textContent;
@@ -81,8 +85,16 @@ test('아무렇게나 눌러도(비활성은 무시) 빈 화면에 닿지 않는
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
   const keys=['root','q','rs','t','lay','label','acc'];
   for(let i=0;i<600;i++){
-    const list=[...t.container.querySelectorAll(`button[data-k="${keys[rnd(keys.length)]}"]`)];
-    fireEvent.click(list[rnd(list.length)]);
+    const k=keys[rnd(keys.length)];
+    const s=t.container.querySelector(`select[data-k="${k}"]`);
+    if(s){
+      const opts=[...s.querySelectorAll('option')];
+      const o=opts[rnd(opts.length)];
+      if(!o.disabled) fireEvent.change(s,{target:{value:o.value}});
+    }else{
+      const list=[...t.container.querySelectorAll(`button[data-k="${k}"]`)];
+      fireEvent.click(list[rnd(list.length)]);
+    }
     assert.ok(t.svgs()>0,`${i}번째 클릭 후 빈 화면`);
   }
 });

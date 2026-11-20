@@ -155,26 +155,24 @@ export default function FretGuide(){
       </header>
 
       <section className="rail" aria-label="코드 선택">
-        <div className="group">
-          <h2 id="h-root">근음</h2>
-          <div className="roots" role="group" aria-labelledby="h-root">
-            {NOTE_SHARP.map((_,i)=>(
-              <Chip key={i} k="root" v={String(i)} on={root===i} onPick={pick}>
-                <span>{nm[i]}</span><small>{NOTE_SHARP[i]!==NOTE_FLAT[i]?(flat?NOTE_SHARP[i]:NOTE_FLAT[i]):''}</small>
-              </Chip>
-            ))}
+        <div className="pair">
+          <div className="group">
+            <h2 id="h-root">근음</h2>
+            <select className="sel" data-k="root" aria-labelledby="h-root" value={String(root)} onChange={e=>pick('root',e.target.value)}>
+              {nm.map((n,i)=><option key={i} value={String(i)}>{NOTE_SHARP[i]!==NOTE_FLAT[i]?`${n} (${flat?NOTE_SHARP[i]:NOTE_FLAT[i]})`:n}</option>)}
+            </select>
           </div>
-        </div>
-        <div className="group">
-          <h2 id="h-qual">코드</h2>
-          <div className="seg quals" role="group" aria-labelledby="h-qual">
-            {QUALITIES.map(x=><Chip key={x.id} k="q" v={x.id} on={qid===x.id} disabled={qOff(x.id)} onPick={pick}>{x.label}</Chip>)}
+          <div className="group">
+            <h2 id="h-qual">코드</h2>
+            <select className="sel" data-k="q" aria-labelledby="h-qual" value={qid} onChange={e=>pick('q',e.target.value)}>
+              {QUALITIES.map(x=><option key={x.id} value={x.id} disabled={qOff(x.id)}>{x.label}</option>)}
+            </select>
           </div>
         </div>
         <details className="adv" open={advOpen} onToggle={e=>setAdvOpen(e.currentTarget.open)}>
           <summary><b>상세 조건</b><span>{advSummary}</span></summary>
           <div className="advbody">
-          {isProg?(
+        {isProg?(
           <div className="group">
             <h2 id="h-n">음 개수</h2>
             <div className="seg row3" role="group" aria-labelledby="h-n">
