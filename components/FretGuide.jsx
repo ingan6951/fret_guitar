@@ -1,7 +1,7 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,hasFormsAt,hasFormsNAt,hasTopAt} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt,hasTopAt} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
@@ -69,7 +69,7 @@ export default function FretGuide(){
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
   const isProg=mode==='prog';
 
-  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,fmin),[isProg,root,qid,rs,octave,t,fmin]);
+  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any',fmin),[isProg,root,qid,rs,octave,t,fmin]);
   // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
   const showResult=isProg&&progDone&&prog.length>0;
   const selOk=sel!==null&&sel<prog.length?sel:null;
@@ -83,8 +83,10 @@ export default function FretGuide(){
   const pickSel=(k,v)=>{ pick(k,v); setSel(null); };
   const rank=useMemo(()=>{
     if(!showResult) return null;
-    const c=progressionCandidates(prog,rs,progN,fmin);
-    return {n:countVoicings(c),list:rankVoicings(c)};
+    // 줄 배치는 진행에 맞게 자동으로 정한다 (붙여서 우선, 쉘을 섞어야 이동이 줄 때만 쉘 포함)
+    const lay=autoLayout(prog,rs,progN,fmin);
+    const c=progressionCandidates(prog,rs,progN,lay,fmin);
+    return {n:countVoicings(c),list:rankVoicings(c),lay};
   },[showResult,prog,rs,progN,fmin]);
   useEffect(()=>{ setVi(0); },[rank]);
   const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
@@ -98,27 +100,27 @@ export default function FretGuide(){
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
   // 진행 보기에서는 구성음 대신 음 개수(progN)로 판단한다
   // 프렛 하한이 있으면 근음에 따라 폼 유무가 달라지므로 근음도 함께 넘긴다
-  const hasAt=(rt,id,r,tt,fm)=>isProg?hasFormsNAt(rt,id,r,progN,fm):hasFormsAt(rt,id,r,tt,fm);
+  const hasAt=(rt,id,r,tt,fm)=>isProg?hasFormsNAt(rt,id,r,progN,'any',fm):hasFormsAt(rt,id,r,tt,'any',fm);
   const has=(id,r)=>hasAt(root,id,r,t,fmin);
   const rootOff=i=>i!==root&&!hasAt(i,qid,rs,t,fmin);
   const qOff=id=>id!==qid&&!has(id,rs);
   // 베이스 스테퍼: 폼이 없는 값은 건너뛰고 가장 가까운 값으로 간다. 갈 곳이 없으면 null
   const rsNext=d=>{ for(let i=RS_ORDER.indexOf(rs)+d;i>=0&&i<RS_ORDER.length;i+=d) if(has(qid,RS_ORDER[i])) return RS_ORDER[i]; return null; };
   // 맨 위 음: 지금 근음·코드·베이스·음 개수·프렛으로 그 음이 맨 위인 폼이 있어야 고를 수 있다
-  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,fmin,i);
+  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,'any',fmin,i);
   const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
   const topTag=c=>Number.isInteger(c.top)?degName(QUALITIES.find(x=>x.id===c.q).deg[c.top]):'';
-  const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,fmin);
+  const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
   // 하한을 올릴수록 폼은 줄어들기만 하므로, 다음 숫자에 폼이 없으면 + 는 막는다
   const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,t,fmin+1);
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
-  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasFormsAt(root,qid,rs,next,fmin); };
+  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasFormsAt(root,qid,rs,next,'any',fmin); };
 
   const presetOff=p=>{
     const pt=presetT(p,q);
     if(pt.filter(Boolean).length<(p.min||1)) return true;
     const same=JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,pt));
-    return !same&&!hasFormsAt(root,qid,rs,pt,fmin);
+    return !same&&!hasFormsAt(root,qid,rs,pt,'any',fmin);
   };
   const presetOn=p=>JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,presetT(p,q)));
   // 접어 둔 상세 조건에 현재 값을 한 줄로 보여 준다
@@ -146,11 +148,11 @@ export default function FretGuide(){
     cards=list.length?list.map((res,i)=>(
       <figure className="card" key={i+res.notes.map(n=>n?n.fret:'x').join(',')}>
         <figcaption>
-          <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스</span></div>
+          <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스{isShell(res)?' · 쉘':''}</span></div>
           <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
         </figcaption>
         <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
-        {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
+        {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}{isShell(res)?' · 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':''}</p>}
       </figure>
     )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`;
@@ -175,15 +177,15 @@ export default function FretGuide(){
       return (
         <figure className="card" key={i}>
           <figcaption>
-            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{d===0?'제자리':`${d}프렛 이동`}</span></>}</span></div>
+            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{isShell(res)?' · 쉘':''}{d===null?null:<> · <span className="move">{d===0?'제자리':`${d}프렛 이동`}</span></>}</span></div>
             <div className="pos">{hp===0?'개방':hp+'프렛'}</div>
           </figcaption>
           <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
-          {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
+          {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}{isShell(res)?' · 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':''}</p>}
         </figure>
       );
     });
-    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · ${progN}음 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`;
+    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · ${progN}음 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(rank.lay==='any'?' · 쉘 폼 포함':'');
   }
 
   return (
