@@ -116,7 +116,7 @@ export default function FretGuide(){
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
   }else if(!showResult){
     cards=<div className="empty">{prog.length
-      ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>왼쪽 &quot;음 개수&quot;에 맞는 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
+      ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>&quot;상세 조건&quot;의 음 개수에 맞는 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
       :<><p>코드를 고르고 &quot;+ 추가&quot;를 눌러 진행을 먼저 만드세요.</p><p>다 고른 뒤 &quot;보이싱 찾기&quot;를 누르면 결과가 나와요.</p></>}</div>;
     count=`코드 ${prog.length}개 / 최대 ${MAX_PROG}개 · ${progN}음`;
   }else if(!cur){
@@ -247,16 +247,6 @@ export default function FretGuide(){
               ))}
             </div>
             {!showResult&&<div className="picker">
-              <label>근음
-                <select aria-label="추가할 근음" value={String(root)} onChange={e=>pick('root',e.target.value)}>
-                  {nm.map((n,i)=><option key={i} value={String(i)}>{n}</option>)}
-                </select>
-              </label>
-              <label>코드
-                <select aria-label="추가할 코드" value={qid} onChange={e=>pick('q',e.target.value)}>
-                  {QUALITIES.map(x=><option key={x.id} value={x.id} disabled={qOff(x.id)}>{x.label}</option>)}
-                </select>
-              </label>
               <div className="prog-actions">
                 <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={pick}>+ {sym} 추가</Chip>
                 <Chip k="pclear" v="" disabled={!prog.length} onPick={pick}>비우기</Chip>

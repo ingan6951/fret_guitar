@@ -209,10 +209,9 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.equal(t.state().progDone,false);
   assert.equal(t.svgs(),0);
   t.click('rs','4');
-  // 진행 화면의 선택 칸
-  const [selRoot,selQ]=t.container.querySelectorAll('.picker select');
-  fireEvent.change(selRoot,{target:{value:'5'}});
-  fireEvent.change(selQ,{target:{value:'maj7'}});
+  // 진행 화면에서도 위쪽 근음·코드 선택을 쓴다
+  assert.equal(t.container.querySelectorAll('.picker select').length,0,'근음·코드는 위쪽 한 곳에서만 고른다');
+  t.click('root','5'); t.click('q','maj7');
   t.click('padd','');
   assert.deepEqual(t.state().prog[3],{root:5,q:'maj7'});
   assert.deepEqual([t.state().root,t.state().q],[5,'maj7']);
