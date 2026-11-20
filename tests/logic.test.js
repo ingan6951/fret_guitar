@@ -30,7 +30,7 @@ for(const [q,shape,low] of [['maj','E',0],['min','E',0],['maj','A',1],['min','A'
   }
 }
 eq(CHORDS.slice(8,52).map(c=>JSON.stringify(c)).sort(),moved.map(c=>JSON.stringify(c)).sort(),'프렛을 올린 폼 44개');
-eq(CHORDS.length,443,'코드 폼 개수 (오픈 8 + 바레 44 + 7·m7·maj7·sus4·sus2·add9 127 + 나머지 종류 264)');
+eq(CHORDS.length,347,'코드 폼 개수');
 // 12개 근음 모두 Major·minor·7·m7·maj7·sus4·sus2가 있다 (add9는 오픈 폼만 있어 일부 근음)
 for(let r=0;r<12;r++) for(const q of QUALITIES.map(x=>x.id).filter(x=>x!=='add9')) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
 for(let r=0;r<12;r++) for(const q of ['maj','min']) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);

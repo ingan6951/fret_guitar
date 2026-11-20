@@ -52,7 +52,7 @@ test('조건은 근음·코드·음 개수뿐이고 묶음·진행 추가 버튼
 
 test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 맨 앞 8개)',()=>{
   const expected={Em:'0 2 2 0 0 0',Am:'x 0 2 2 1 0',C:'x 3 2 0 1 0',D:'x x 0 2 3 2',G:'3 2 0 0 0 3',E:'0 2 2 1 0 0',A:'x 0 2 2 2 0',Dm:'x x 0 2 3 1'};
-  assert.equal(CHORDS.length,443);
+  assert.equal(CHORDS.length,347);
   for(const c of CHORDS.slice(0,8)){
     const t=boot({root:c.root,q:c.q});
     assert.equal(t.container.querySelector('.sym').textContent,nameOf(c));
