@@ -11,7 +11,8 @@ for(let m=1;m<16;m++) masks.push([0,1,2,3].map(i=>!!(m&(1<<i))));
 const lowFret=res=>Math.min(...res.notes.filter(Boolean).map(n=>n.fret));
 
 // 전수 탐색용 줄 목록 (로직과 따로 만든다): 베이스부터 위로 n줄, 'skip'은 사이에 빈 줄이 정확히 하나
-function refStrings(b,n,layout){
+function refStrings(b,n){
+  const layout='adj';
   const out=[];
   const gaps=layout==='skip'?1:0;
   const low=b-(n-1)-gaps;
@@ -31,16 +32,16 @@ function refStrings(b,n,layout){
 }
 
 let combos=0,impossible=0;
-['adj','skip'].forEach(layout=>{
+['adj'].forEach(layout=>{
 QUALITIES.forEach(q=>{
   masks.forEach(t=>{
     const mask=maskFor(q.id,t);
-    if(!mask.length){ eq(hasForms(q.id,4,t,layout),false,`빈 구성음 ${q.id}`); return; } // 트라이어드에서 7도만 켠 경우
+    if(!mask.length){ eq(hasForms(q.id,4,t),false,`빈 구성음 ${q.id}`); return; } // 트라이어드에서 7도만 켠 경우
     [6,5,4,3,2,1,'all'].forEach(rs=>{
       const strs=rs==='all'?[6,5,4,3,2,1]:[rs];
       for(let root=0;root<12;root++){
-        const got=collect(root,q.id,rs,false,t,layout);
-        const gotOct=collect(root,q.id,rs,true,t,layout);
+        const got=collect(root,q.id,rs,false,t);
+        const gotOct=collect(root,q.id,rs,true,t);
         // 1) 모든 폼이 규칙을 지키는지
         [...got,...gotOct].forEach(res=>{
           const sounded=res.notes.filter(Boolean);
@@ -76,7 +77,7 @@ QUALITIES.forEach(q=>{
         strs.forEach(b=>{
           const n=mask.length;
           const pcs=mask.map(i=>(root+q.tones[i])%12);
-          refStrings(b,n,layout).forEach(strings=>{
+          refStrings(b,n).forEach(strings=>{
           const rec=(k,frets,used)=>{
             if(k===n){
               if(Math.max(...frets)-Math.min(...frets)<=MAX_SPAN){
@@ -102,8 +103,8 @@ QUALITIES.forEach(q=>{
         if(missing.length||extra.length) fails.push(`${layout} ${q.id} ${rs} mask=${mask} root=${root}: 전수 탐색과 불일치 (빠짐 ${missing.length}, 초과 ${extra.length}) ${missing[0]||extra[0]}`);
       }
       // 3) hasForms는 근음과 무관하게 실제 결과와 일치
-      const any=collect(0,q.id,rs,false,t,layout).length>0;
-      eq(hasForms(q.id,rs,t,layout),any,`hasForms ${layout} ${q.id} ${rs} mask=${mask}`);
+      const any=collect(0,q.id,rs,false,t).length>0;
+      eq(hasForms(q.id,rs,t),any,`hasForms ${layout} ${q.id} ${rs} mask=${mask}`);
       combos++; if(!any) impossible++;
     });
   });
@@ -141,24 +142,9 @@ QUALITIES.forEach(q=>{
   eq(collect(0,'maj',4,false,[true,true,true,true]).length,collect(0,'maj',4,false,[true,true,true,false]).length,'트라이어드는 7도 토글 무시');
   // 7도만 켠 트라이어드는 폼이 없다
   eq(hasForms('maj',4,[false,false,false,true]),false,'트라이어드에서 7도만 켬');
-  // 쉘: C7, 6번 줄 베이스 R–♭7–3 → 6번 줄 8, 5번 줄 뮤트, 4번 줄 8, 3번 줄 9
-  const shell=collect(0,'7',6,false,[true,true,false,true],'skip');
-  const s1=shell.find(r=>r.formName==='R–♭7–3');
-  eq(s1&&s1.notes.map(n=>n?n.fret:null),[8,null,8,9,null,null],'C7 쉘 R–♭7–3 (6번 줄)');
-  eq(s1&&s1.notes.map(n=>n?n.finger:null),[1,null,2,3,null,null],'C7 쉘 손가락');
-  // 쉘: Cmaj7, 5번 줄 베이스 R–7–3 → 5번 줄 3, 4번 줄 뮤트, 3번 줄 4, 2번 줄 5
-  const s2=collect(0,'maj7',5,false,[true,true,false,true],'skip').find(r=>r.formName==='R–7–3');
-  eq(s2&&s2.notes.map(n=>n?n.fret:null),[null,3,null,4,5,null],'Cmaj7 쉘 R–7–3 (5번 줄)');
-  eq(s2&&s2.notes.map(n=>n?n.finger:null),[null,1,null,2,3,null],'Cmaj7 쉘 손가락');
-  // 개방 위치는 실제 누르는 프렛으로 번호를 매긴다
-  // C7 쉘 6번 줄 베이스 3–R–♭7: 6번 줄 개방(E), 5번 줄 3(C), 3번 줄 3(B♭) → 1·2번 손가락
-  const op=collect(0,'7',6,false,[true,true,false,true],'skip').find(r=>r.formName==='3–R–♭7'&&r.baseFret===0);
-  eq(op&&op.notes.map(n=>n?[n.fret,n.finger]:null),[[0,null],[3,1],null,[3,2],null,null],'C7 쉘 개방 위치 손가락');
   // Am7 붙여서 5번 줄 베이스 R–5–♭7–♭3: x02010 → 2번 줄 1프렛 1번, 4번 줄 2프렛 2번
   const am=collect(9,'m7',5,false,[true,true,true,true]).find(r=>r.formName==='R–5–♭7–♭3'&&r.baseFret===0);
   eq(am&&am.notes.map(n=>n?[n.fret,n.finger]:null),[null,[0,null],[2,2],[0,null],[1,1],null],'Am7 개방 위치 손가락');
-  // 1음은 건너뛸 줄이 없어 쉘 폼이 없다
-  eq(hasForms('maj',6,[true,false,false,false],'skip'),false,'1음 쉘');
   // 바레는 치지 않는 줄을 가로지르지 않는다
   const mk=(st,fr,fi)=>({string:st,fret:fr,finger:fi});
   eq(barres([null,mk(5,3,1),null,mk(3,3,1),mk(2,3,1),null]),[{fret:3,top:2,bottom:3}],'바레가 뮤트 줄을 건너지 않음');
@@ -171,17 +157,17 @@ QUALITIES.forEach(q=>{
   const {degreeOf}=L;
   for(const q of QUALITIES){
     const all=[0,1,2,3].map(i=>i<q.tones.length);
-    if(!hasForms(q.id,'all',all,'adj')) fails.push(`${q.id}: 모든 구성음 폼 없음`);
+    if(!hasForms(q.id,'all',all)) fails.push(`${q.id}: 모든 구성음 폼 없음`);
     eq(q.deg.length,q.tones.length,`${q.id}: 도수 이름 수`);
     eq(new Set(q.tones).size,q.tones.length,`${q.id}: 구성음 중복`);
-    collect(0,q.id,'all',false,all,'adj').forEach(r=>r.formName.split('–').forEach(d=>{ if(!q.deg.includes(d)) fails.push(`${q.id}: 폼 이름 ${r.formName}`); }));
+    collect(0,q.id,'all',false,all).forEach(r=>r.formName.split('–').forEach(d=>{ if(!q.deg.includes(d)) fails.push(`${q.id}: 폼 이름 ${r.formName}`); }));
   }
   const add9=QUALITIES.find(q=>q.id==='add9'),dim7=QUALITIES.find(q=>q.id==='dim7'),aug=QUALITIES.find(q=>q.id==='aug');
   eq([degreeOf(add9,2),degreeOf(add9,14),degreeOf(add9,4),degreeOf(add9,5)],['9','9','3',''],'add9 도수');
   eq(degreeOf(dim7,9),'𝄫7','dim7 도수');
   eq(degreeOf(aug,8),'♯5','aug 도수');
   // Csus4 폼은 모두 C·F·G로만 이루어진다
-  collect(0,'sus4',5,false,[true,true,true,false],'adj').forEach(r=>{
+  collect(0,'sus4',5,false,[true,true,true,false]).forEach(r=>{
     const pcs=r.notes.filter(Boolean).map(n=>n.pc).sort((a,b)=>a-b);
     eq(pcs,[0,5,7],'Csus4 음: C F G');
   });
@@ -192,7 +178,7 @@ for(const q of QUALITIES){
   for(const t of masks){
     for(const rs of [6,4,1,'all']){
       for(const root of [0,4,9]){
-        ['adj','skip'].forEach(l=>collect(root,q.id,rs,false,t,l).forEach(r=>{ barres(r.notes); }));
+        ['adj'].forEach(l=>collect(root,q.id,rs,false,t).forEach(r=>{ barres(r.notes); }));
       }
     }
   }
@@ -208,10 +194,10 @@ let progChecks=0;
     const len=2+rnd(3);
     const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
     const rs=[6,5,4,'all'][rnd(4)];
-    const layout=['adj','skip'][rnd(2)];
+    const layout='adj';
     const t=[true,true,rnd(2)===0,true];
-    const cands=prog.map(c=>candidates(c.root,c.q,rs,t,layout));
-    const plan=planProgression(prog,rs,t,layout);
+    const cands=prog.map(c=>candidates(c.root,c.q,rs,t));
+    const plan=planProgression(prog,rs,t);
     // 폼이 있는 코드는 반드시 후보 중 하나를 고른다
     plan.pick.forEach((r,i)=>{
       if((r===null)!==(cands[i].length===0)) fails.push(`진행 ${trial}: ${i}번째 선택 여부`); const key=x=>x.notes.map(n=>n?n.fret:'x').join(',');
@@ -234,13 +220,9 @@ let progChecks=0;
     progChecks++;
   }
   // 알려진 예: 같은 코드를 반복하면 이동 0
-  const same=planProgression([{root:9,q:'m7'},{root:9,q:'m7'},{root:9,q:'m7'}],'all',[true,true,true,true],'adj');
+  const same=planProgression([{root:9,q:'m7'},{root:9,q:'m7'},{root:9,q:'m7'}],'all',[true,true,true,true]);
   eq(same.total,0,'같은 코드 반복은 이동 0');
-  // ii–V–I (Dm7–G7–Cmaj7, 쉘 R·3·7): 이동이 작아야 한다 (3프렛 이하)
-  const twofive=planProgression([{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}],'all',[true,true,false,true],'skip');
-  if(!(twofive.total<=3)) fails.push(`ii–V–I 쉘 총 이동 ${twofive.total}`);
-  // 폼이 없는 코드(트라이어드에 7도만)는 null이고 앞뒤는 계속 계산된다
-  const gap=planProgression([{root:0,q:'7'},{root:5,q:'maj'},{root:7,q:'7'}],4,[false,false,false,true],'adj');
+  const gap=planProgression([{root:0,q:'7'},{root:5,q:'maj'},{root:7,q:'7'}],4,[false,false,false,true]);
   eq(gap.pick.map(Boolean),[true,false,true],'폼 없는 코드는 건너뜀');
 }
 
@@ -253,14 +235,14 @@ let progChecks=0;
   eq(toneSubsets('maj',4),[[true,true,true,false]],'트라이어드 4음은 구성음 전부(겹쳐서 채움)');
   eq(toneSubsets('maj',2).length,3,'트라이어드 2음 조합 3가지');
   // 음 개수 후보 = 각 조합 후보의 합집합이고, 모두 그 음 개수
-  for(const qq of QUALITIES) for(const n of [2,3,4]) for(const rs of [6,4,'all']) for(const layout of ['adj','skip']){
-    const got=candidatesN(4,qq.id,rs,n,layout);
+  for(const qq of QUALITIES) for(const n of [2,3,4]) for(const rs of [6,4,'all']) for(const layout of ['adj']){
+    const got=candidatesN(4,qq.id,rs,n);
     const want=new Set();
-    toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,layout,0,n>qq.tones.length?n:null).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
+    toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,0,n>qq.tones.length?n:null).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
     eq(got.length,want.size,`음 개수 후보 수 ${qq.id} ${n} ${rs} ${layout}`);
     const k=n;
     got.forEach(r=>{ if(r.notes.filter(Boolean).length!==k) fails.push(`음 개수 ${qq.id} ${n}: ${r.notes.filter(Boolean).length}음`); });
-    eq(hasFormsN(qq.id,rs,n,layout),got.length>0,`hasFormsN ${qq.id} ${n} ${rs} ${layout}`);
+    eq(hasFormsN(qq.id,rs,n),got.length>0,`hasFormsN ${qq.id} ${n} ${rs} ${layout}`);
   }
   let seed=11;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
@@ -268,9 +250,9 @@ let progChecks=0;
   for(let trial=0;trial<40;trial++){
     const len=1+rnd(3);
     const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
-    const rs=[6,5,4,3,'all'][rnd(5)],layout=['adj','skip'][rnd(2)];
+    const rs=[6,5,4,3,'all'][rnd(5)],layout='adj';
     const nn=2+rnd(3);
-    const cands=progressionCandidates(prog,rs,nn,layout);
+    const cands=progressionCandidates(prog,rs,nn);
     const n=countVoicings(cands);
     // 전수: 모든 조합의 비용
     const all=[];
@@ -292,30 +274,18 @@ let progChecks=0;
       keys.add(key);
     }
     if(n<=300&&r.get(n)!==null) fails.push(`보이싱 ${trial}: 가짓수보다 많이 나옴`);
-    if(nn===4){
+    if(nn===4&&prog.every(c=>QUALITIES.find(x=>x.id===c.q).tones.length===4)){
       // 음 개수 4 = 모든 구성음: 최소 이동 계산과 1번째가 같다
-      const best=planProgression(prog,rs,[true,true,true,true],layout);
+      const best=planProgression(prog,rs,[true,true,true,true]);
       if(Math.abs(r.get(0).total-best.total)>1e-6) fails.push(`보이싱 ${trial}: 1번째 ${r.get(0).total} != 최소 ${best.total}`);
     }
   }
   // 큰 진행도 앞쪽은 빠르게 나온다
-  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',4,'adj');
+  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',4);
   const rb=rankVoicings(big);
   let last=-1;
   for(let k=0;k<200;k++){ const v=rb.get(k); if(v.total<last-1e-9) fails.push('큰 진행: 비용 순서'); last=v.total; }
   if(!(countVoicings(big)>1e6)) fails.push('큰 진행 가짓수 '+countVoicings(big));
-}
-
-// 'any'(붙여서 + 쉘): 폼 수는 둘의 합이고, hasForms도 둘 중 하나라도 있으면 true
-{
-  for(const q of QUALITIES) for(const t of masks){
-    if(!maskFor(q.id,t).length) continue;
-    for(const rs of [6,5,4,3,2,1,'all']){
-      const a=collect(0,q.id,rs,false,t,'adj').length,k=collect(0,q.id,rs,false,t,'skip').length,any=collect(0,q.id,rs,false,t,'any').length;
-      eq(any,a+k,`any 폼 수 ${q.id} ${rs} ${maskFor(q.id,t)}`);
-      eq(hasForms(q.id,rs,t,'any'),a+k>0,`hasForms any ${q.id} ${rs} ${maskFor(q.id,t)}`);
-    }
-  }
 }
 
 // 프렛 하한(minFret): 소리 나는 모든 음이 하한 이상인 폼만, 기본 위치와 한 옥타브 위 위치를 모두 후보로
@@ -327,56 +297,44 @@ let progChecks=0;
   for(let trial=0;trial<400;trial++){
     const q=QUALITIES[rnd(QUALITIES.length)],t=masks[rnd(masks.length)];
     if(!maskFor(q.id,t).length) continue;
-    const rs=[6,5,4,3,2,1,'all'][rnd(7)],layout=['adj','skip','any'][rnd(3)],root=rnd(12),minFret=[1,2,3,5,8,12][rnd(6)];
+    const rs=[6,5,4,3,2,1,'all'][rnd(7)],layout='adj',root=rnd(12),minFret=[1,2,3,5,8,12][rnd(6)];
     const want=new Set();
-    [false,true].forEach(oct=>collect(root,q.id,rs,oct,t,layout).forEach(r=>{
+    [false,true].forEach(oct=>collect(root,q.id,rs,oct,t).forEach(r=>{
       if(r.notes.every(n=>!n||n.fret>=minFret)) want.add(keyOf(r));
     }));
-    const got=collect(root,q.id,rs,false,t,layout,minFret);
+    const got=collect(root,q.id,rs,false,t,minFret);
     const gotKeys=new Set(got.map(keyOf));
     got.forEach(r=>{ if(r.notes.some(n=>n&&n.fret<minFret)) fails.push(`프렛 하한 ${minFret} 위반 ${keyOf(r)}`); });
     eq([...gotKeys].sort(),[...want].sort(),`프렛 하한 ${minFret} ${q.id} ${rs} ${layout} root=${root} ${maskFor(q.id,t)}`);
-    eq(hasFormsAt(root,q.id,rs,t,layout,minFret),want.size>0,`hasFormsAt ${minFret}`);
+    eq(hasFormsAt(root,q.id,rs,t,minFret),want.size>0,`hasFormsAt ${minFret}`);
     checked++;
   }
   // 하한 0은 기존과 같다
-  eq(collect(9,'m7',4,false,[true,true,true,true],'any',0).length,collect(9,'m7',4,false,[true,true,true,true],'any').length,'하한 0');
+  eq(collect(9,'m7',4,false,[true,true,true,true],0).length,collect(9,'m7',4,false,[true,true,true,true]).length,'하한 0');
   console.log(`프렛 하한 ${checked}개 검사`);
 }
 
-// 진행의 줄 배치 자동 선택
+// 쉘 폼(줄 건너뛰기)은 없다: 소리 나는 줄은 항상 이웃한 줄
 {
-  const {autoLayout,progressionCandidates,rankVoicings,isShell}=L;
-  let seed=777;
-  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  let anyCount=0;
-  for(let trial=0;trial<120;trial++){
-    const prog=Array.from({length:2+rnd(4)},()=>({root:rnd(12),q:QUALITIES[rnd(QUALITIES.length)].id}));
-    const rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)];
-    const lay=autoLayout(prog,rs,n);
-    if(!['adj','any'].includes(lay)) fails.push(`autoLayout 값 ${lay}`);
-    const adj=progressionCandidates(prog,rs,n,'adj'),any=progressionCandidates(prog,rs,n,'any');
-    const miss=c=>c.filter(x=>x[0]===null).length;
-    const best=c=>{ const r=rankVoicings(c).get(0); return r?r.total:Infinity; };
-    if(lay==='any'){
-      anyCount++;
-      if(!(miss(any)<miss(adj)||best(any)<best(adj)-1e-9)) fails.push(`autoLayout any인데 이득이 없음 ${JSON.stringify(prog)} ${rs} ${n}`);
-    }else if(miss(any)<miss(adj)||best(any)<best(adj)-1e-9) fails.push(`autoLayout adj인데 any가 이득 ${JSON.stringify(prog)} ${rs} ${n}`);
-    // 붙여서만 쓰기로 했으면 쉘 폼은 하나도 없다
-    if(lay==='adj') adj.forEach(c=>c.forEach(r=>{ if(r&&isShell(r)) fails.push('adj 후보에 쉘'); }));
-  }
-  console.log(`줄 배치 자동 선택 120개 검사 (쉘 포함 ${anyCount}개)`);
+  const {candidatesN,progressionCandidates}=L;
+  let checked=0;
+  for(const qq of QUALITIES) for(const n of [1,2,3,4,5,6]) for(const rs of [6,5,4,3,2,1,'all']) candidatesN(4,qq.id,rs,n).forEach(r=>{
+    const ss=r.notes.map((x,i)=>x?6-i:null).filter(x=>x!==null);
+    if(ss[0]-ss[ss.length-1]!==ss.length-1) fails.push(`쉘 폼 ${qq.id} ${n}음 ${rs}: ${ss}`);
+    checked++;
+  });
+  console.log(`쉘 없음 ${checked}개 검사`);
 }
 
 // 음 개수 1~6: 구성음보다 많으면 구성음을 겹쳐서 채운다
 {
-  const {candidatesN,hasFormsN,hasFormsNAt,isShell}=L;
+  const {candidatesN,hasFormsN,hasFormsNAt}=L;
   let checked=0;
   for(const qq of QUALITIES) for(const n of [1,2,3,4,5,6]) for(const rs of [6,5,4,3,2,1,'all']){
     const root=[0,4,9,2][(qq.tones.length+n)%4];
-    const cs=candidatesN(root,qq.id,rs,n,'any');
-    if((cs.length>0)!==hasFormsN(qq.id,rs,n,'any')) fails.push(`hasFormsN 불일치 ${qq.id} ${n} ${rs}`);
-    if((cs.length>0)!==hasFormsNAt(root,qq.id,rs,n,'any',0)) fails.push(`hasFormsNAt 불일치 ${qq.id} ${n} ${rs}`);
+    const cs=candidatesN(root,qq.id,rs,n);
+    if((cs.length>0)!==hasFormsN(qq.id,rs,n)) fails.push(`hasFormsN 불일치 ${qq.id} ${n} ${rs}`);
+    if((cs.length>0)!==hasFormsNAt(root,qq.id,rs,n,0)) fails.push(`hasFormsNAt 불일치 ${qq.id} ${n} ${rs}`);
     cs.forEach(r=>{
       const sounded=r.notes.filter(Boolean);
       if(sounded.length!==n) fails.push(`${qq.id} ${n}음인데 ${sounded.length}음`);
@@ -387,14 +345,13 @@ let progChecks=0;
       // 손가락 4개로 잡을 수 있고(손가락 번호가 1~4), 한 프렛 폭 안
       sounded.forEach(x=>{ if(x.fret>0&&!(x.finger>=1&&x.finger<=4)) fails.push(`${qq.id} ${n}음: 손가락 없음`); });
       if(n===6&&r.bass!==6) fails.push('6음인데 베이스가 6번 줄이 아님');
-      if(n===6&&isShell(r)) fails.push('6음인데 쉘');
       checked++;
     });
   }
   // 6음 폼은 베이스 6번 줄만, 5음은 6·5번 줄만
-  for(const rs of [5,4,3,2,1]) if(hasFormsN('m7',rs,6,'any')) fails.push(`6음이 베이스 ${rs}번 줄에 있음`);
-  if(!hasFormsN('m7',6,6,'any')) fails.push('6음 베이스 6번 줄 폼 없음');
-  if(hasFormsN('m7',4,5,'any')) fails.push('5음이 베이스 4번 줄에 있음');
+  for(const rs of [5,4,3,2,1]) if(hasFormsN('m7',rs,6)) fails.push(`6음이 베이스 ${rs}번 줄에 있음`);
+  if(!hasFormsN('m7',6,6)) fails.push('6음 베이스 6번 줄 폼 없음');
+  if(hasFormsN('m7',4,5)) fails.push('5음이 베이스 4번 줄에 있음');
   console.log(`음 개수 1~6 ${checked}개 폼 검사`);
 }
 
@@ -406,7 +363,7 @@ let progChecks=0;
   for(let trial=0;trial<150;trial++){
     const q=QUALITIES[rnd(QUALITIES.length)];
     const root=rnd(12),rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)],fm=[0,0,3,5][rnd(4)];
-    const all=candidatesN(root,q.id,rs,n,'any',fm);
+    const all=candidatesN(root,q.id,rs,n,fm);
     for(let tp=0;tp<q.tones.length;tp++){
       const c={root,q:q.id,top:tp};
       // 직접 계산: 가장 높은 줄의 음 높이가 tp번째 구성음인 폼
@@ -414,21 +371,21 @@ let progChecks=0;
         const hi=r.notes.filter(Boolean).sort((a,b)=>a.string-b.string)[0];
         return ((hi.pc-root+12)%12)===q.tones[tp];
       });
-      const got=progressionCandidates([c],rs,n,'any',fm)[0];
+      const got=progressionCandidates([c],rs,n,fm)[0];
       const ok=want.length?got.length===want.length&&got.every(r=>topIndex(r,c)===tp):got.length===1&&got[0]===null;
       if(!ok) fails.push(`top 필터 ${q.id} ${root} rs${rs} n${n} fm${fm} top${tp}`);
-      if(hasTopAt(root,q.id,rs,n,'any',fm,tp)!==(want.length>0)) fails.push(`hasTopAt ${q.id} ${root} top${tp}`);
+      if(hasTopAt(root,q.id,rs,n,fm,tp)!==(want.length>0)) fails.push(`hasTopAt ${q.id} ${root} top${tp}`);
       checked++;
     }
   }
   // 범위를 벗어난 top은 무시한다
   if(topOf({root:0,q:'maj',top:3})!==null) fails.push('범위 밖 top');
-  const base=progressionCandidates([{root:0,q:'maj'}],4,3,'any')[0].length;
-  if(progressionCandidates([{root:0,q:'maj',top:9}],4,3,'any')[0].length!==base) fails.push('범위 밖 top이 후보를 줄임');
+  const base=progressionCandidates([{root:0,q:'maj'}],4,3)[0].length;
+  if(progressionCandidates([{root:0,q:'maj',top:9}],4,3)[0].length!==base) fails.push('범위 밖 top이 후보를 줄임');
   // top을 지정하면 가짓수는 줄어들기만 한다
   const prog=[{root:2,q:'maj'},{root:9,q:'maj'},{root:11,q:'m7'},{root:2,q:'maj'}];
-  const free=countVoicings(progressionCandidates(prog,'all',2,'any'));
-  const fixed=countVoicings(progressionCandidates(prog.map(c=>({...c,top:1})),'all',2,'any'));
+  const free=countVoicings(progressionCandidates(prog,'all',2));
+  const fixed=countVoicings(progressionCandidates(prog.map(c=>({...c,top:1})),'all',2));
   if(!(fixed<=free)) fails.push('top 지정이 가짓수를 늘림');
   console.log(`맨 위 음 ${checked}개 검사 (가짓수 ${free} → ${fixed})`);
 }

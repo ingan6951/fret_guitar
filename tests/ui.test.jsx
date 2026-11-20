@@ -77,13 +77,14 @@ test('7도만 켜면 트라이어드로 못 바꾼다',()=>{
   assert.deepEqual([f.maj,f.min,f['7'],f.maj7,f.m7],[true,true,false,false,false]);
 });
 
-test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=>{
+test('쉘 폼은 없다: 줄 배치 선택도, 쉘 표시도 없고 소리 나는 줄은 항상 이웃한 줄',()=>{
   const t=boot();
   assert.equal(t.container.querySelector('button[data-k="lay"]'),null);
-  assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/); // 4음은 쉘이 없다
-  t.click('t','2'); t.click('rs','6'); // 5도를 끄면 근음·♭3·♭7: 붙여서 + 쉘
-  assert.match(t.container.querySelector('.cards').textContent,/쉘/);
-  // 근음만 켜면 한 줄짜리라 쉘이 없다
+  assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
+  t.click('t','2'); t.click('rs','6'); // 5도를 끄면 근음·♭3·♭7 세 줄: 붙여서만
+  assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
+  assert.ok(t.svgs()>0);
+  // 근음만 켜면 한 줄짜리
   t.click('t','1'); t.click('t','3');
   assert.deepEqual(t.state().t.slice(0,4),[true,false,false,false]);
   assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
