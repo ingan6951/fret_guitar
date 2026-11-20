@@ -1,6 +1,6 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
@@ -87,6 +87,10 @@ export default function FretGuide(){
   useEffect(()=>{ setVi(0); },[rank]);
   const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
   const fmt=n=>n.toLocaleString('ko-KR');
+  // 좁은 화면에서는 카드를 가로로 한 장씩 넘겨 본다 (넓은 화면에서는 격자). 목록이 바뀌면 첫 장으로 돌아간다.
+  const cardsRef=useRef(null);
+  const [ci,setCi]=useState(0);
+  useEffect(()=>{ const el=cardsRef.current; if(el&&el.scrollTo) el.scrollTo({left:0,behavior:'auto'}); setCi(0); },[list,cur,showResult,isProg]);
   const needOct=!isProg&&list.some(r=>r.canOctave);
 
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
@@ -109,9 +113,24 @@ export default function FretGuide(){
   const advSummary=(isProg?`${progN}음`:`구성음 ${maskFor(qid,t).map(i=>degName(q.deg[i])).join('·')}`)
     +` · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`;
 
-  let cards,count,solo=false;
+  const stepOf=el=>el.children.length>1?el.children[1].offsetLeft-el.children[0].offsetLeft:el.clientWidth;
+  const slide=d=>{
+    const el=cardsRef.current; if(!el) return;
+    const next=Math.max(0,Math.min(nCards-1,ci+d));
+    if(el.scrollTo) el.scrollTo({left:next*stepOf(el),behavior:'smooth'});
+    setCi(next);
+  };
+  const onScroll=e=>{ const el=e.currentTarget,st=stepOf(el); if(st>0) setCi(Math.max(0,Math.min(nCards-1,Math.round(el.scrollLeft/st)))); };
+  const onKey=e=>{
+    if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+    if(!(window.matchMedia&&window.matchMedia('(max-width:719px)').matches)) return;
+    e.preventDefault(); slide(e.key==='ArrowLeft'?-1:1);
+  };
+
+  let cards,count,solo=false,nCards=1;
   if(!isProg){
     solo=list.length===1;
+    nCards=list.length||1;
     cards=list.length?list.map((res,i)=>(
       <figure className="card" key={i+res.notes.map(n=>n?n.fret:'x').join(',')}>
         <figcaption>
@@ -133,6 +152,7 @@ export default function FretGuide(){
     count='가능한 보이싱 0가지';
   }else{
     let moved=0,prev=null;
+    nCards=prog.length;
     cards=prog.map((c,i)=>{
       const res=cur.pick[i],name=chordName(c);
       if(!res){ prev=null; return <div className="empty" key={i}><p>{i+1}. {name}: 지금 음 개수·베이스·줄 배치로는 잡히는 폼이 없어요.</p></div>; }
@@ -274,7 +294,14 @@ export default function FretGuide(){
         )}
 
         <p className="count">{count}</p>
-        <div className={'cards'+(solo?' solo':'')} aria-live="polite">{cards}</div>
+        {nCards>1&&(
+          <div className="slidenav" role="group" aria-label="폼 넘기기">
+            <button className="chip" type="button" data-k="cprev" aria-label="이전 폼" disabled={ci<=0} onClick={()=>slide(-1)}>◀</button>
+            <span className="cpos" aria-live="polite">{Math.min(ci,nCards-1)+1} / {nCards}</span>
+            <button className="chip" type="button" data-k="cnext" aria-label="다음 폼" disabled={ci>=nCards-1} onClick={()=>slide(1)}>▶</button>
+          </div>
+        )}
+        <div className={'cards'+(solo?' solo':'')+(nCards===1?' one':'')} ref={cardsRef} tabIndex={0} aria-label="폼 목록" aria-live="polite" onScroll={onScroll} onKeyDown={onKey}>{cards}</div>
 
         <div className="foot">
           <div className="legend"><span><i className="r"></i>근음</span><span><i></i>구성음</span><span><i className="o"></i>개방현</span><span>×&nbsp;치지 않는 줄</span></div>

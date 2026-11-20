@@ -276,3 +276,22 @@ test('진행: 코드를 골라 수정·제거 (C–Am–Dm–G–C)',()=>{
   assert.equal(t.state().progDone,false);
   assert.ok(t.btn('pdel','0'));
 });
+
+test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 바뀌면 첫 장으로, 폼이 하나면 없다',()=>{
+  const t=boot();
+  const pos=()=>t.container.querySelector('.cpos').textContent;
+  const prev=()=>t.container.querySelector('button[data-k="cprev"]'),next=()=>t.container.querySelector('button[data-k="cnext"]');
+  assert.equal(pos(),'1 / 4');
+  assert.equal(prev().disabled,true);
+  fireEvent.click(next());
+  assert.equal(pos(),'2 / 4');
+  for(let i=0;i<5;i++) fireEvent.click(next());
+  assert.equal(pos(),'4 / 4');
+  assert.equal(next().disabled,true);
+  t.click('rs','all');
+  assert.match(pos(),/^1 \//);
+  // 구성음을 근음 하나만 켜고 베이스를 고정하면 폼이 하나라 넘기기가 없다
+  t.click('t','1'); t.click('t','2'); t.click('t','3'); t.click('rs','4');
+  assert.equal(t.svgs(),1);
+  assert.equal(t.container.querySelector('.slidenav'),null);
+});
