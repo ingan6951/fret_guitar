@@ -157,3 +157,9 @@ h1,h2,p{margin:0}
 .set>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 14px;font-size:14px;-webkit-tap-highlight-color:transparent}
 .set>summary::-webkit-details-marker{display:none}
 .set>summary:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:10px}
+
+/* 진행 중: 다음 코드를 고르는 동안 기준이 되는 앞(·뒤) 폼을 작게 보여 준다 */
+.refs{display:flex;gap:10px;flex-wrap:wrap}
+.card.ref{flex:0 1 260px;min-width:0;padding:8px 10px 4px;border-style:dashed;gap:4px}
+.card.ref .who b{font-size:14px}
+.card.ref .pos{font-size:13px;padding:2px 10px}

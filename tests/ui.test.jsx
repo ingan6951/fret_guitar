@@ -179,6 +179,10 @@ test('진행: 폼의 + 로 시작해 다음 코드 폼을 이어 담고, 앞 폼
   assert.equal(t.state().prog.length,1);
   assert.deepEqual(chipNames(t),['Am7']);
   assert.equal(t.state().prog[0].frets.length,6);
+  // 다음 코드를 고르는 동안 이전 폼을 보여 준다
+  const refTag=()=>[...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v);
+  assert.deepEqual(refTag(),['이전 폼']);
+  assert.match(t.container.querySelector('.refs .card.ref').textContent,/1\. Am7/);
   // 다음 코드 Dm7: 카드에 앞 폼에서의 이동이 보이고 가까운 순(오름차순)
   t.click('root','2');
   const g=gaps(t);
@@ -215,6 +219,7 @@ test('진행: 칩을 골라 그 자리를 다시 고르거나 제거하고, 이�
   assert.equal(t.container.querySelector('button[data-k="fadd"]'),null);
   assert.ok(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
   assert.ok(t.container.querySelector('.cards .card.cur'),'지금 자리의 폼 표시');
+  assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼','다음 폼'],'다시 고르는 중에는 앞뒤 폼');
   assert.match(t.container.querySelector('.cards .move').textContent,/앞 .* 뒤 /);
   // 다시 누르면 선택이 풀리고 + 로 돌아간다
   t.click('psel','1');

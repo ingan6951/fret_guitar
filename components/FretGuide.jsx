@@ -81,6 +81,9 @@ export default function FretGuide(){
     if(before||after) items.sort((a,b)=>a.cost-b.cost||a.i-b.i);
     return items;
   },[list,before,after]);
+  const bi=selOk!==null?selOk-1:prog.length-1; // 기준이 되는 앞 폼의 순번
+  const ai=selOk!==null&&selOk+1<prog.length?selOk+1:-1; // 다시 고르는 중이면 뒤 폼도
+  const refs=[bi>=0?{i:bi,tag:'이전 폼'}:null,ai>=0?{i:ai,tag:'다음 폼'}:null].filter(Boolean);
   const curKey=selOk!==null?keyOf(prog[selOk].root,prog[selOk].q,prog[selOk].frets):null;
   const full=prog.length>=MAX_PROG;
   const hand=r=>handPos(r);
@@ -261,6 +264,22 @@ export default function FretGuide(){
           </div>
         )}
 
+        {!viewAll&&refs.length>0&&(
+          <div className="refs" aria-label="기준 폼">
+            {refs.map(({i,tag})=>{
+              const c=prog[i],res=resolved[i],name=chordName(c);
+              return (
+                <figure className="card ref" key={tag} data-k="ref" data-v={tag}>
+                  <figcaption>
+                    <div className="who"><b>{tag}</b><span>{i+1}. {name}</span></div>
+                    <div className="capr"><div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div></div>
+                  </figcaption>
+                  <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
+                </figure>
+              );
+            })}
+          </div>
+        )}
         <p className="count">{count}</p>
         {nCards>1&&(
           <div className="slidenav" role="group" aria-label="폼 넘기기">
