@@ -115,6 +115,33 @@ test('설정 저장·복원, 불가능하거나 잘못된 저장값 복구',()=>
   assert.equal(e.container.querySelector('.sym').textContent,'Am7');
 });
 
+test('구성음 프리셋: 적용·눌림 표시, 트라이어드에서는 3·7이 비활성',()=>{
+  const t=boot();
+  t.click('preset','guide');
+  assert.deepEqual(t.state().t,[false,true,false,true]);
+  assert.equal(t.btn('preset','guide').getAttribute('aria-pressed'),'true');
+  assert.equal(t.btn('preset','all').getAttribute('aria-pressed'),'false');
+  assert.ok(t.svgs()>0);
+  t.click('preset','rootless');
+  assert.deepEqual(t.state().t,[false,true,true,true]);
+  assert.ok(t.svgs()>0);
+  t.click('preset','all');
+  assert.deepEqual(t.state().t,[true,true,true,true]);
+  t.click('q','maj');
+  assert.equal(t.flags('preset').guide,true);
+  assert.equal(t.flags('preset').all,false);
+});
+
+test('상세 조건 요약 줄과 카드 제목',()=>{
+  const t=boot();
+  assert.match(t.container.querySelector('.adv summary span').textContent,/구성음 1·♭3·5·♭7 · 붙여서 · 베이스 4번 줄/);
+  t.click('rs','all'); t.click('lay','skip');
+  assert.match(t.container.querySelector('.adv summary span').textContent,/쉘 · 베이스 전체/);
+  t.click('lay','adj'); t.click('rs','4');
+  assert.equal(t.container.querySelector('.card .who b').textContent,'4번 줄');
+  assert.match(t.container.querySelector('.card .hint.order').textContent,/^낮은 줄부터 /);
+});
+
 test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   const t=boot();
   t.click('mode','prog');

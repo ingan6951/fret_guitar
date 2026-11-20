@@ -9,6 +9,15 @@ const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','�
 const LAYOUTS=[['adj','붙여서','인접한 줄'],['skip','쉘','한 줄 건너뛰기']];
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
 const MODES=[['chord','코드'],['prog','진행']];
+// 자주 쓰는 구성음 조합. 도수 이름으로 고르므로 코드 종류가 바뀌어도 같은 뜻을 유지한다. min은 필요한 최소 구성음 수.
+const PRESETS=[
+  {id:'all',label:'전부',pick:()=>true},
+  {id:'guide',label:'3·7',pick:d=>/^♭?3$/.test(d)||/7$/.test(d),min:2},
+  {id:'rootless',label:'근음 빼기',pick:d=>d!=='R'},
+  {id:'r5',label:'근음+5',pick:d=>d==='R'||d==='5',min:2}
+];
+const presetT=(p,q)=>[0,1,2,3].map(i=>i<q.deg.length&&p.pick(q.deg[i]));
+const degName=d=>d==='R'?'1':d;
 const NOTE_COUNTS=[[2,'2음','구성음 2개'],[3,'3음','구성음 3개'],[4,'4음','모든 구성음']];
 
 function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
@@ -22,9 +31,11 @@ export default function FretGuide(){
   const [state,setState]=useState(DEFAULT);
   const [ready,setReady]=useState(false);
   const [vi,setVi]=useState(0); // 진행 결과에서 보고 있는 보이싱 순번 (0부터)
+  const [advOpen,setAdvOpen]=useState(false); // 상세 조건 펼침 (넓은 화면에서는 처음부터 펼친다)
 
   useEffect(()=>{ const s=loadState(); if(s) setState(s); setReady(true); },[]);
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
+  useEffect(()=>{ if(typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(min-width:920px)').matches) setAdvOpen(true); },[]);
 
   const pick=(k,v)=>setState(s=>{
     switch(k){
@@ -34,6 +45,7 @@ export default function FretGuide(){
       case 'label': return {...s,label:v};
       case 'lay': return {...s,layout:v};
       case 'mode': return {...s,mode:v};
+      case 'preset': { const p=PRESETS.find(x=>x.id===v); const qq=QUALITIES.find(x=>x.id===s.q); return p?{...s,t:presetT(p,qq)}:s; }
       case 'acc': return {...s,flat:v==='flat'};
       case 'oct': return {...s,octave:!s.octave};
       case 't': { const t=s.t.slice(); t[Number(v)]=!t[Number(v)]; return {...s,t}; }
@@ -77,16 +89,28 @@ export default function FretGuide(){
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
   const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasForms(qid,rs,next,layout); };
 
+  const presetOff=p=>{
+    const pt=presetT(p,q);
+    if(pt.filter(Boolean).length<(p.min||1)) return true;
+    const same=JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,pt));
+    return !same&&!hasForms(qid,rs,pt,layout);
+  };
+  const presetOn=p=>JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,presetT(p,q)));
+  // 접어 둔 상세 조건에 현재 값을 한 줄로 보여 준다
+  const advSummary=(isProg?`${progN}음`:`구성음 ${maskFor(qid,t).map(i=>degName(q.deg[i])).join('·')}`)
+    +` · ${layout==='skip'?'쉘':'붙여서'} · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`;
+
   let cards,count,solo=false;
   if(!isProg){
     solo=list.length===1;
     cards=list.length?list.map((res,i)=>(
       <figure className="card" key={i+res.notes.map(n=>n?n.fret:'x').join(',')}>
         <figcaption>
-          <div className="who"><b>{res.bass}번 줄 베이스</b><span>{res.formName}</span></div>
+          <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스</span></div>
           <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
         </figcaption>
         <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
+        {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
       </figure>
     )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
     count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
@@ -114,6 +138,7 @@ export default function FretGuide(){
             <div className="pos">{hp===0?'개방':hp+'프렛'}</div>
           </figcaption>
           <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
+          {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
         </figure>
       );
     });
@@ -146,37 +171,45 @@ export default function FretGuide(){
             {QUALITIES.map(x=><Chip key={x.id} k="q" v={x.id} on={qid===x.id} disabled={qOff(x.id)} onPick={pick}>{x.label}</Chip>)}
           </div>
         </div>
-        {isProg?(
-        <div className="group">
-          <h2 id="h-n">음 개수</h2>
-          <div className="seg row3" role="group" aria-labelledby="h-n">
-            {NOTE_COUNTS.map(([v,l,d])=><Chip key={v} k="pn" v={String(v)} on={progN===v} disabled={pnOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+        <details className="adv" open={advOpen} onToggle={e=>setAdvOpen(e.currentTarget.open)}>
+          <summary><b>상세 조건</b><span>{advSummary}</span></summary>
+          <div className="advbody">
+          {isProg?(
+          <div className="group">
+            <h2 id="h-n">음 개수</h2>
+            <div className="seg row3" role="group" aria-labelledby="h-n">
+              {NOTE_COUNTS.map(([v,l,d])=><Chip key={v} k="pn" v={String(v)} on={progN===v} disabled={pnOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+            </div>
           </div>
-        </div>
-        ):(
-        <div className="group">
-          <h2 id="h-t">구성음</h2>
-          <div className="seg row4" role="group" aria-labelledby="h-t">
-            {[0,1,2,3].map(i=>(
-              <Chip key={i} k="t" v={String(i)} on={i<q.tones.length&&t[i]} disabled={tOff(i)} onPick={pick}>
-                <span>{i<q.tones.length?(q.deg[i]==='R'?'1':q.deg[i]):'–'}</span><small>{i<q.tones.length?nm[(root+q.tones[i])%12]:''}</small>
-              </Chip>
-            ))}
+          ):(
+          <div className="group">
+            <h2 id="h-t">구성음</h2>
+            <div className="seg compact presets" role="group" aria-label="구성음 프리셋">
+              {PRESETS.map(p=><Chip key={p.id} k="preset" v={p.id} on={presetOn(p)} disabled={presetOff(p)} onPick={pick}>{p.label}</Chip>)}
+            </div>
+            <div className="seg row4" role="group" aria-labelledby="h-t">
+              {[0,1,2,3].map(i=>(
+                <Chip key={i} k="t" v={String(i)} on={i<q.tones.length&&t[i]} disabled={tOff(i)} onPick={pick}>
+                  <span>{i<q.tones.length?degName(q.deg[i]):'–'}</span><small>{i<q.tones.length?nm[(root+q.tones[i])%12]:''}</small>
+                </Chip>
+              ))}
+            </div>
           </div>
-        </div>
-        )}
-        <div className="group">
-          <h2 id="h-lay">줄 배치</h2>
-          <div className="seg row2" role="group" aria-labelledby="h-lay">
-            {LAYOUTS.map(([v,l,d])=><Chip key={v} k="lay" v={v} on={layout===v} disabled={layOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+          )}
+          <div className="group">
+            <h2 id="h-lay">줄 배치</h2>
+            <div className="seg row2" role="group" aria-labelledby="h-lay">
+              {LAYOUTS.map(([v,l,d])=><Chip key={v} k="lay" v={v} on={layout===v} disabled={layOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+            </div>
           </div>
-        </div>
-        <div className="group">
-          <h2 id="h-rs">베이스</h2>
-          <div className="seg row7" role="group" aria-labelledby="h-rs">
-            {RS.map(([v,l])=><Chip key={v} k="rs" v={v} on={String(rs)===v} disabled={rsOff(v)} onPick={pick}>{l}</Chip>)}
+          <div className="group">
+            <h2 id="h-rs">베이스</h2>
+            <div className="seg row7" role="group" aria-labelledby="h-rs">
+              {RS.map(([v,l])=><Chip key={v} k="rs" v={v} on={String(rs)===v} disabled={rsOff(v)} onPick={pick}>{l}</Chip>)}
+            </div>
           </div>
-        </div>
+          </div>
+        </details>
       </section>
 
       <main className="stage">
@@ -187,16 +220,19 @@ export default function FretGuide(){
               {q.tones.map(x=><span key={x} className={x===0?'r':''}>{nm[(root+x)%12]}</span>)}
             </div>
           </div>
-          <div className="tools">
-            <div className="seg compact" role="group" aria-label="표시 방식">
-              {LABELS.map(([v,l])=><Chip key={v} k="label" v={v} on={label===v} onPick={pick}>{l}</Chip>)}
+          <details className="set">
+            <summary aria-label="설정">⚙ 설정</summary>
+            <div className="setbody">
+              <div className="seg compact" role="group" aria-label="표시 방식">
+                {LABELS.map(([v,l])=><Chip key={v} k="label" v={v} on={label===v} onPick={pick}>{l}</Chip>)}
+              </div>
+              <div className="seg compact" role="group" aria-label="음 이름 표기">
+                <Chip k="acc" v="sharp" on={!flat} onPick={pick} aria-label="샤프 표기">♯</Chip>
+                <Chip k="acc" v="flat" on={flat} onPick={pick} aria-label="플랫 표기">♭</Chip>
+              </div>
+              {needOct&&<Chip k="oct" v="" on={octave} onPick={pick}>한 옥타브 위로</Chip>}
             </div>
-            <div className="seg compact" role="group" aria-label="음 이름 표기">
-              <Chip k="acc" v="sharp" on={!flat} onPick={pick} aria-label="샤프 표기">♯</Chip>
-              <Chip k="acc" v="flat" on={flat} onPick={pick} aria-label="플랫 표기">♭</Chip>
-            </div>
-            {needOct&&<Chip k="oct" v="" on={octave} onPick={pick}>한 옥타브 위로</Chip>}
-          </div>
+          </details>
         </div>
 
         {isProg&&(
