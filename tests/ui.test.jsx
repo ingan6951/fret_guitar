@@ -70,7 +70,7 @@ test('코드 하나만 볼 때도 음 개수 − + 와 하이톤을 쓴다 (진�
   // 베이스 4번 줄에서는 5음 이상이 없어 + 가 막힌다
   assert.equal(t.btn('pnstep','1').disabled,true);
   t.click('pnstep','-1');
-  assert.equal(t.state().progN,3);
+  assert.equal(t.state().nc,3);
   assert.match(t.count(),/3음/);
   for(const svg of t.container.querySelectorAll('.cards svg')) assert.equal(svg.querySelectorAll('.dot,.open').length,3,'3음 폼');
   // 하이톤: 자동 + 구성음 도수, 고르면 그 음이 맨 위인 폼만 남는다
@@ -81,9 +81,6 @@ test('코드 하나만 볼 때도 음 개수 − + 와 하이톤을 쓴다 (진�
   assert.ok(t.svgs()>0);
   t.click('top','');
   assert.equal(t.state().top,null);
-  // 하이톤은 근음·코드 다음 칸에 있다
-  const order=[...t.container.querySelectorAll('.rail .pair select')].map(x=>x.dataset.k);
-  assert.deepEqual(order,['root','q','top']);
 });
 
 test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=>{
@@ -94,14 +91,14 @@ test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=
   assert.match(t.container.querySelector('.cards').textContent,/쉘/);
   // 1음은 한 줄짜리라 쉘이 없다
   t.click('pnstep','-1'); t.click('pnstep','-1');
-  assert.equal(t.state().progN,1);
+  assert.equal(t.state().nc,1);
   assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
 });
 
 test('모든 코드·구성음·베이스 조합이 화면을 깨지 않는다',()=>{
   let n=0;
   for(const q of QUALITIES) for(let m=1;m<=6;m++) for(const rs of [1,3,4,6,'all']){
-    const r=boot({root:n%12,q:q.id,rs,progN:m,top:n%5===0?n%4:null,label:['finger','note','degree'][n%3],flat:n%2===0});
+    const r=boot({root:n%12,q:q.id,rs,nc:m,top:n%5===0?n%4:null,label:['finger','note','degree'][n%3],flat:n%2===0});
     // 불가능한 저장값은 복구되므로 항상 폼이 있다
     assert.ok(r.svgs()>0,`빈 화면 ${q.id} ${m}음 ${rs}`);
     cleanup(); localStorage.clear(); n++;
@@ -140,7 +137,7 @@ test('설정 저장·복원, 불가능하거나 잘못된 저장값 복구',()=>
   const a=boot();
   a.click('root','2'); a.click('q','7'); a.click('rs','5'); a.click('pnstep','-1'); a.click('top','2'); a.click('label','degree'); a.click('acc','flat');
   const saved=a.state();
-  assert.equal(saved.progN,3);
+  assert.equal(saved.nc,3);
   assert.equal(saved.top,2);
   cleanup();
   const b=boot(JSON.stringify(saved));
@@ -149,182 +146,110 @@ test('설정 저장·복원, 불가능하거나 잘못된 저장값 복구',()=>
   const c=boot({root:0,q:'7',rs:1});
   assert.ok(c.svgs()>0); assert.equal(c.state().rs,4);
   cleanup(); localStorage.clear();
-  const d=boot({root:3,q:'maj',rs:4,progN:9,top:3});
-  assert.equal(d.state().progN,4);
+  const d=boot({root:3,q:'maj',rs:4,nc:9,top:3});
+  assert.equal(d.state().nc,4);
   assert.equal(d.state().top,null,'트라이어드에 없는 하이톤은 자동으로');
   cleanup(); localStorage.clear();
   const e=boot('{broken');
   assert.equal(e.container.querySelector('.sym').textContent,'Am7');
 });
 
-test('상세 조건 요약 줄과 카드 제목',()=>{
+test('조건은 한 열: 근음·코드·하이톤·음 개수·베이스·프렛, 묶음·진행 추가 버튼은 없다',()=>{
   const t=boot();
-  assert.match(t.container.querySelector('.adv summary span').textContent,/4음 · 베이스 4번 줄/);
-  t.click('rs','all');
-  assert.match(t.container.querySelector('.adv summary span').textContent,/베이스 전체/);
-  t.click('rs','4');
+  assert.deepEqual([...t.container.querySelectorAll('.rail .row h2')].map(x=>x.textContent),['근음','코드','하이톤','음 개수','베이스','프렛']);
+  assert.equal(t.container.querySelector('.adv'),null,'상세 조건 묶음은 없다');
+  assert.equal(t.container.querySelector('button[data-k="mode"]'),null,'진행 추가 버튼은 없다');
+  assert.equal(t.container.querySelector('button[data-k="pfind"]'),null);
+  assert.equal(t.container.querySelector('.hint'),null,'폼 아래 캡션은 없다');
   assert.equal(t.container.querySelector('.card .who b').textContent,'4번 줄');
-  assert.match(t.container.querySelector('.card .hint.order').textContent,/^낮은 줄부터 /);
+  assert.ok(t.container.querySelector('.card .capr .pos'),'우측 상단에 프렛 위치');
+  assert.ok(t.container.querySelector('.card .capr button[data-k="fadd"]'),'우측 상단에 + 버튼');
 });
 
-test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
+const chipNames=t=>[...t.container.querySelectorAll('button[data-k="psel"]')].map(b=>b.firstChild.textContent);
+// 카드의 앞 이동 프렛(제자리는 0)을 위에서부터 읽는다
+const gaps=t=>[...t.container.querySelectorAll('.cards .card .move')].map(m=>{ const x=m.textContent.match(/앞 (제자리|(\d+)프렛)/); return x?(x[2]===undefined?0:Number(x[2])):null; });
+
+test('진행: 폼의 + 로 시작해 다음 코드 폼을 이어 담고, 앞 폼에서 가까운 순으로 정렬된다',()=>{
   const t=boot();
-  t.click('mode','prog');
-  assert.match(t.container.querySelector('.cards').textContent,/추가/);
-  t.click('root','2'); t.click('q','m7'); t.click('padd','');
-  t.click('root','7'); t.click('q','7'); t.click('padd','');
-  t.click('root','0'); t.click('q','maj7'); t.click('padd','');
-  assert.deepEqual(t.state().prog,[{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}]);
-  // 진행을 다 고르기 전에는 결과가 없다
-  assert.equal(t.svgs(),0);
-  assert.match(t.container.querySelector('.cards').textContent,/보이싱 찾기/);
-  assert.match(t.count(),/코드 3개/);
-  // 보이싱 찾기 → 가짓수와 1번째(손 이동 최소)
-  t.click('pfind','');
-  assert.equal(t.svgs(),3);
-  assert.match(t.container.querySelector('.vcount').textContent,/가능한 보이싱 216가지/);
-  assert.equal(t.container.querySelector('.vpos').textContent,'1 / 216');
-  assert.match(t.count(),/1번째 · 4음 · 총 손 이동/);
-  assert.equal(t.container.querySelector('.picker'),null);
-  const prevBtn=t.container.querySelector('button[data-k="vprev"]'),nextBtn=t.container.querySelector('button[data-k="vnext"]');
-  assert.equal(prevBtn.disabled,true);
-  const first=t.container.querySelector('.cards').innerHTML;
-  fireEvent.click(nextBtn);
-  assert.equal(t.container.querySelector('.vpos').textContent,'2 / 216');
-  assert.notEqual(t.container.querySelector('.cards').innerHTML,first);
-  fireEvent.click(prevBtn);
-  assert.equal(t.container.querySelector('.cards').innerHTML,first);
-  // 이동은 순위대로 늘어난다 (1번째 ≤ 2번째 ≤ … )
-  let last=-1;
-  for(let i=0;i<20;i++){
-    const m=Number(t.count().match(/총 손 이동 (\d+)프렛/)[1]);
-    assert.ok(m>=last-1,`순위 ${i+1}: 이동 ${m}`); last=Math.max(last,m);
-    fireEvent.click(t.container.querySelector('button[data-k="vnext"]'));
-  }
-  // 설정을 바꾸면 1번째로 돌아간다
+  assert.equal(t.container.querySelector('.prog'),null,'처음엔 진행이 없다');
   t.click('rs','all');
-  assert.match(t.container.querySelector('.vpos').textContent,/^1 \//);
-  // 진행 보기는 구성음 대신 음 개수: 구성음 칩이 없고 음 개수 칩이 있다
-  assert.equal(t.container.querySelector('button[data-k="t"]'),null);
-  assert.equal(t.container.querySelector('#h-n').nextElementSibling.querySelector('output').textContent,'4');
-  t.click('rs','4');
-  assert.match(t.container.querySelector('.vcount').textContent,/216가지/);
-  // 3음: 7th는 구성음 3개 조합(4가지)의 폼을 모두 후보로 → 가짓수가 바뀌고 카드마다 3음
+  // Am7 첫 폼의 + : 진행 시작
+  fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
+  assert.equal(t.state().prog.length,1);
+  assert.deepEqual(chipNames(t),['Am7']);
+  assert.equal(t.state().prog[0].frets.length,6);
+  // 다음 코드 Dm7: 카드에 앞 폼에서의 이동이 보이고 가까운 순(오름차순)
+  t.click('root','2');
+  const g=gaps(t);
+  assert.ok(g.length>1&&g.every(x=>x!==null),'앞 이동 표시');
+  assert.deepEqual(g,[...g].sort((a,b)=>a-b),'가까운 순');
+  fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
+  assert.deepEqual(chipNames(t),['Am7','Dm7']);
+  // 담은 폼은 운지째 저장되어 조건을 바꿔도 그대로다
+  const saved=t.state().prog.map(e=>e.frets.join());
   t.click('pnstep','-1');
-  assert.equal(t.state().progN,3);
-  assert.doesNotMatch(t.container.querySelector('.vcount').textContent,/216가지/);
-  assert.match(t.count(),/3음/);
-  for(const svg of t.container.querySelectorAll('.cards svg')) assert.equal(svg.querySelectorAll('.dot,.open').length,3,'3음 폼');
-  t.click('pnstep','1');
-  assert.equal(t.state().progN,4);
-  t.click('rs','all');
-  // 진행 수정 → 다시 고르기 화면
-  t.click('pedit','');
-  assert.equal(t.state().progDone,false);
-  assert.equal(t.svgs(),0);
-  t.click('rs','4');
-  // 진행 화면에서도 위쪽 근음·코드 선택을 쓴다
-  assert.equal(t.container.querySelectorAll('.picker select').length,0,'근음·코드는 위쪽 한 곳에서만 고른다');
-  t.click('root','5'); t.click('q','maj7');
-  t.click('padd','');
-  assert.deepEqual(t.state().prog[3],{root:5,q:'maj7'});
-  assert.deepEqual([t.state().root,t.state().q],[5,'maj7']);
-  t.click('pfind',''); assert.equal(t.state().progDone,true);
-  t.click('psel','3'); t.click('pdel','3');
-  assert.equal(t.state().progDone,false,'진행을 바꾸면 결과를 닫는다');
-  t.click('psel','1'); t.click('pdel','1');
-  assert.deepEqual(t.state().prog,[{root:2,q:'m7'},{root:0,q:'maj7'}]);
-  for(let i=0;i<10;i++) fireEvent.click(t.btn('padd',''));
+  assert.deepEqual(t.state().prog.map(e=>e.frets.join()),saved);
+  // 최대 8개
+  for(let i=0;i<6;i++) fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
   assert.equal(t.state().prog.length,8);
-  assert.equal(t.btn('padd','').disabled,true);
-  t.click('pfind','');
-  assert.ok(t.svgs()>0);
-  const saved=JSON.stringify(t.state());
+  assert.equal(t.container.querySelector('button[data-k="fadd"]').disabled,true);
+  // 복원
+  const raw=JSON.stringify(t.state());
   cleanup();
-  const b=boot(saved);
-  assert.equal(b.state().prog.length,8); assert.equal(b.state().mode,'prog'); assert.equal(b.state().progDone,true);
-  assert.ok(b.svgs()>0,'저장된 결과 화면 복원');
-  b.click('pedit','');
-  // 코드 보기로 돌아가도 음 개수와 하이톤은 그대로 있다
-  b.click('mode','chord'); assert.ok(b.container.querySelector('select[data-k="top"]')); assert.ok(b.btn('pnstep','1')); b.click('mode','prog');
-  b.click('pclear','');
-  assert.deepEqual(b.state().prog,[]);
-  b.click('mode','chord');
-  assert.ok(b.svgs()>0);
-  cleanup(); localStorage.clear();
-  const c=boot({mode:'prog',prog:[{root:3,q:'m7'},{root:99,q:'x'},null]});
-  assert.deepEqual(c.state().prog,[{root:3,q:'m7'}]);
+  const b=boot(raw);
+  assert.equal(b.state().prog.length,8);
+  assert.equal(chipNames(b).length,8);
 });
 
-test('진행: 코드를 골라 수정·제거 (C–Am–Dm–G–C)',()=>{
+test('진행: 칩을 골라 그 자리를 다시 고르거나 제거하고, 이웃 폼은 그대로 둔다 (C–Am–Dm–G)',()=>{
   const t=boot();
-  t.click('mode','prog');
-  for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj'],[0,'maj']]){ t.click('root',String(r)); t.click('q',q); t.click('padd',''); }
-  assert.equal(t.state().prog.length,5);
-  assert.equal(t.btn('pdel','1'),null,'고르기 전에는 제거 버튼이 없다');
-  // Am 선택: 근음·코드 선택에 불러오고, 바꾼 것이 없으면 수정은 비활성
+  t.click('rs','all'); t.click('pnstep','-1');
+  for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj']]){ t.click('root',String(r)); t.click('q',q); fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]')); }
+  assert.deepEqual(chipNames(t),['C','Am','Dm','G']);
+  const keep=t.state().prog.map(e=>e.frets.join());
+  // Am 선택: 코드를 불러오고, 카드는 ↺ 로 바뀌고, 앞뒤 폼에서 가까운 순
   t.click('psel','1');
   assert.deepEqual([t.state().root,t.state().q],[9,'min']);
   assert.equal(t.btn('psel','1').getAttribute('aria-pressed'),'true');
-  assert.equal(t.btn('pupd','1').disabled,true);
-  // 다시 누르면 선택이 풀린다
+  assert.equal(t.container.querySelector('button[data-k="fadd"]'),null);
+  assert.ok(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
+  assert.ok(t.container.querySelector('.cards .card.cur'),'지금 자리의 폼 표시');
+  assert.match(t.container.querySelector('.cards .move').textContent,/앞 .* 뒤 /);
+  // 다시 누르면 선택이 풀리고 + 로 돌아간다
   t.click('psel','1');
-  assert.equal(t.btn('pdel','1'),null);
-  // 수정: Am → Em
+  assert.ok(t.container.querySelector('button[data-k="fadd"]'));
+  // 바꾸기: Am 자리를 다른 폼으로 → 이웃은 그대로
   t.click('psel','1');
-  t.click('root','4');
-  assert.equal(t.btn('pupd','1').disabled,false);
-  t.click('pupd','1');
-  assert.deepEqual(t.state().prog.map(c=>`${c.root}${c.q}`),['0maj','4min','2min','7maj','0maj']);
-  assert.equal(t.btn('pupd','1'),null,'수정하면 선택이 풀린다');
-  // 제거: Dm
-  t.click('psel','2'); t.click('pdel','2');
-  assert.deepEqual(t.state().prog.map(c=>`${c.root}${c.q}`),['0maj','4min','7maj','0maj']);
-  assert.equal(t.btn('pdel','2'),null);
-  // 결과 화면에서 칩을 누르면 편집 화면으로 돌아온다
-  t.click('pfind','');
-  assert.equal(t.state().progDone,true);
-  t.click('psel','0');
-  assert.equal(t.state().progDone,false);
-  assert.ok(t.btn('pdel','0'));
+  const second=[...t.container.querySelectorAll('button[data-k="frep"]')][1];
+  fireEvent.click(second);
+  const now=t.state().prog.map(e=>e.frets.join());
+  assert.equal(now[0],keep[0]); assert.equal(now[2],keep[2]); assert.equal(now[3],keep[3]);
+  assert.notEqual(now[1],keep[1]);
+  assert.equal(t.state().prog.length,4);
+  // 코드를 바꿔서 그 자리를 다른 코드로: Dm → Em
+  t.click('psel','2'); t.click('root','4');
+  fireEvent.click(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
+  assert.deepEqual(chipNames(t),['C','Am','Em','G']);
+  // 제거: 이웃 폼은 그대로, 이동 거리만 다시 계산된다
+  const before=t.state().prog.map(e=>e.frets.join());
+  t.click('psel','1'); t.click('pdel','1');
+  assert.deepEqual(chipNames(t),['C','Em','G']);
+  assert.deepEqual(t.state().prog.map(e=>e.frets.join()),[before[0],before[2],before[3]]);
+  // 진행 보기: 담은 폼이 차례로 모인다
+  t.click('pview','');
+  assert.equal(t.svgs(),3);
+  assert.match(t.count(),/진행 3개 · 총 손 이동 \d+프렛/);
+  t.click('pview','');
+  // 비우기
+  t.click('pclear','');
+  assert.equal(t.state().prog.length,0);
+  assert.equal(t.container.querySelector('.prog'),null);
 });
 
-test('진행: 코드별 맨 위 음 지정 (D–A–Bm7)',()=>{
+test('음 개수 − + (1~6), 6음이면 베이스는 6번 줄만',()=>{
   const t=boot();
-  t.click('mode','prog');
   t.click('rs','all');
-  // 기본은 자동
-  assert.equal(t.state().top,null);
-  // D 메이저: 맨 위 음을 3도(인덱스 1)로 지정해 추가
-  t.click('root','2'); t.click('q','maj');
-  t.click('top','1');
-  assert.equal(t.state().top,1);
-  t.click('padd','');
-  assert.equal(t.state().prog[0].top,1);
-  assert.match(t.btn('psel','0').textContent,/↑3/);
-  // 자동으로 추가하면 top 없음
-  t.click('top','');
-  t.click('root','9'); t.click('padd','');
-  assert.equal(t.state().prog[1].top,undefined);
-  // 칩을 고르면 그 코드의 맨 위 음이 선택에 불러와진다
-  t.click('psel','0');
-  assert.equal(t.state().top,1);
-  // 수정: 맨 위 음을 5도(2)로 바꾸면 수정 버튼이 켜진다
-  assert.equal(t.btn('pupd','0').disabled,true);
-  t.click('top','2');
-  assert.equal(t.btn('pupd','0').disabled,false);
-  t.click('pupd','0');
-  assert.equal(t.state().prog[0].top,2);
-  // 결과 화면의 보이싱은 모두 지정한 음이 맨 위
-  t.click('pfind','');
-  assert.ok(t.svgs()>0);
-});
-
-test('진행: 음 개수 − + (1~6), 6음이면 베이스는 6번 줄만',()=>{
-  const t=boot();
-  t.click('mode','prog');
-  t.click('rs','all');
-  t.click('padd','');
   const val=()=>t.container.querySelector('#h-n').nextElementSibling.querySelector('output').textContent;
   assert.equal(val(),'4');
   t.click('pnstep','1'); t.click('pnstep','1');
@@ -338,7 +263,7 @@ test('진행: 음 개수 − + (1~6), 6음이면 베이스는 6번 줄만',()=>{
   for(let i=0;i<5;i++) t.click('pnstep','-1');
   assert.equal(val(),'1');
   assert.equal(t.btn('pnstep','-1').disabled,true,'1에서 − 막힘');
-  assert.equal(t.state().progN,1);
+  assert.equal(t.state().nc,1);
 });
 
 test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 바뀌면 첫 장으로, 폼이 하나면 없다',()=>{
@@ -362,7 +287,7 @@ test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 �
 
 test('프렛 하한: − 0 + 로 올리고 내리며, 그 프렛 이상만 잡는 폼이 나온다',()=>{
   const t=boot();
-  const val=()=>t.container.querySelector('.stepper .val').textContent;
+  const val=()=>t.container.querySelector('#h-fret + .stepper .val').textContent;
   const plus=()=>t.container.querySelector('button[data-k="fstep"][data-v="1"]'),minus=()=>t.container.querySelector('button[data-k="fstep"][data-v="-1"]');
   assert.equal(t.state().fmin,0);
   assert.equal(val(),'전체');
@@ -373,7 +298,6 @@ test('프렛 하한: − 0 + 로 올리고 내리며, 그 프렛 이상만 잡�
   assert.ok(t.svgs()>0);
   // 소리 나는 모든 음이 5프렛 이상이므로 기준 음 프렛(.pos)도 5 이상이고 개방현은 없다
   for(const pos of t.container.querySelectorAll('.cards .pos')) assert.ok(parseInt(pos.textContent,10)>=5,`위치 ${pos.textContent}`);
-  assert.match(t.container.querySelector('.adv summary span').textContent,/5프렛 이상/);
   // 하한을 켜면 한 옥타브 위로 버튼은 의미가 없어 숨긴다
   assert.equal(t.container.querySelector('button[data-k="oct"]'),null);
   fireEvent.click(minus());

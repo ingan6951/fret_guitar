@@ -1,6 +1,6 @@
 // 폼 생성 로직 검증. lib/fretlogic.js를 별도의 전수 탐색(브루트포스)과 맞춰 본다.
 import * as L from '../lib/fretlogic.js';
-const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,handPos,moveCost,candidates,planProgression}=L;
+const {QUALITIES,OPEN,MAX_FRET,MAX_SPAN,maskFor,shapesFor,hasForms,resolve,collect,barres,handPos,moveCost,candidates}=L;
 
 const fails=[];
 const eq=(a,b,msg)=>{ if(JSON.stringify(a)!==JSON.stringify(b)) fails.push(`${msg}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`); };
@@ -196,112 +196,28 @@ for(const q of QUALITIES){
   }
 }
 
-// 6) 진행: 동적 계획법 결과가 모든 조합을 다 따져 본 최솟값과 같다
-let progChecks=0;
+// 6) 음 개수 후보: 구성음 조합별 후보의 합집합이고, 모두 그 음 개수
 {
-  let seed=7;
-  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const qs=QUALITIES.map(q=>q.id);
-  for(let trial=0;trial<60;trial++){
-    const len=2+rnd(3);
-    const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
-    const rs=[6,5,4,'all'][rnd(4)];
-    const layout=['adj','skip'][rnd(2)];
-    const t=[true,true,rnd(2)===0,true];
-    const cands=prog.map(c=>candidates(c.root,c.q,rs,t,layout));
-    const plan=planProgression(prog,rs,t,layout);
-    // 폼이 있는 코드는 반드시 후보 중 하나를 고른다
-    plan.pick.forEach((r,i)=>{
-      if((r===null)!==(cands[i].length===0)) fails.push(`진행 ${trial}: ${i}번째 선택 여부`); const key=x=>x.notes.map(n=>n?n.fret:'x').join(',');
-      if(r&&!cands[i].some(c=>key(c)===key(r))) fails.push(`진행 ${trial}: 후보 밖 선택`); });
-    // 전수 탐색 (폼 없는 코드에서 끊긴다)
-    let brute=0,seg=[];
-    const segMin=seg=>{
-      if(!seg.length) return 0;
-      let best=Infinity;
-      const rec=(k,prev,acc)=>{ if(acc>=best) return; if(k===seg.length){ best=acc; return; } seg[k].forEach(b=>rec(k+1,b,acc+(prev?moveCost(prev,b):0))); };
-      rec(0,null,0); return best;
-    };
-    cands.forEach(c=>{ if(c.length) seg.push(c); else { brute+=segMin(seg); seg=[]; } });
-    brute+=segMin(seg);
-    if(Math.abs(brute-plan.total)>1e-6) fails.push(`진행 ${trial}: 최솟값 ${plan.total} != 전수 ${brute}`);
-    // 고른 폼으로 다시 계산한 비용도 같다
-    let again=0;
-    for(let i=1;i<prog.length;i++) if(plan.pick[i]&&plan.pick[i-1]) again+=moveCost(plan.pick[i-1],plan.pick[i]);
-    if(Math.abs(again-plan.total)>1e-6) fails.push(`진행 ${trial}: 고른 폼 비용 ${again} != ${plan.total}`);
-    progChecks++;
-  }
-  // 알려진 예: 같은 코드를 반복하면 이동 0
-  const same=planProgression([{root:9,q:'m7'},{root:9,q:'m7'},{root:9,q:'m7'}],'all',[true,true,true,true],'adj');
-  eq(same.total,0,'같은 코드 반복은 이동 0');
-  // ii–V–I (Dm7–G7–Cmaj7, 쉘 R·3·7): 이동이 작아야 한다 (3프렛 이하)
-  const twofive=planProgression([{root:2,q:'m7'},{root:7,q:'7'},{root:0,q:'maj7'}],'all',[true,true,false,true],'skip');
-  if(!(twofive.total<=3)) fails.push(`ii–V–I 쉘 총 이동 ${twofive.total}`);
-  // 폼이 없는 코드(트라이어드에 7도만)는 null이고 앞뒤는 계속 계산된다
-  const gap=planProgression([{root:0,q:'7'},{root:5,q:'maj'},{root:7,q:'7'}],4,[false,false,false,true],'adj');
-  eq(gap.pick.map(Boolean),[true,false,true],'폼 없는 코드는 건너뜀');
-}
-
-// 7) 보이싱 순위: 가짓수, 비용 순서, 전수 정렬과 일치, 1번째는 최소 이동과 같음
-{
-  const {progressionCandidates,countVoicings,rankVoicings,toneSubsets,candidatesN,hasFormsN}=L;
-  // 음 개수 조합
+  const {toneSubsets,candidatesN,hasFormsN,collectN}=L;
   eq(toneSubsets('m7',3).length,4,'7th 3음 조합 4가지');
   eq(toneSubsets('m7',4),[[true,true,true,true]],'7th 4음은 전부');
   eq(toneSubsets('maj',4),[[true,true,true,false]],'트라이어드 4음은 구성음 전부(겹쳐서 채움)');
   eq(toneSubsets('maj',2).length,3,'트라이어드 2음 조합 3가지');
-  // 음 개수 후보 = 각 조합 후보의 합집합이고, 모두 그 음 개수
   for(const qq of QUALITIES) for(const n of [2,3,4]) for(const rs of [6,4,'all']) for(const layout of ['adj','skip']){
     const got=candidatesN(4,qq.id,rs,n,layout);
     const want=new Set();
     toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,layout,0,n>qq.tones.length?n:null).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
     eq(got.length,want.size,`음 개수 후보 수 ${qq.id} ${n} ${rs} ${layout}`);
-    const k=n;
-    got.forEach(r=>{ if(r.notes.filter(Boolean).length!==k) fails.push(`음 개수 ${qq.id} ${n}: ${r.notes.filter(Boolean).length}음`); });
+    got.forEach(r=>{ if(r.notes.filter(Boolean).length!==n) fails.push(`음 개수 ${qq.id} ${n}: ${r.notes.filter(Boolean).length}음`); });
     eq(hasFormsN(qq.id,rs,n,layout),got.length>0,`hasFormsN ${qq.id} ${n} ${rs} ${layout}`);
   }
-  let seed=11;
-  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const qs=QUALITIES.map(q=>q.id);
-  for(let trial=0;trial<40;trial++){
-    const len=1+rnd(3);
-    const prog=Array.from({length:len},()=>({root:rnd(12),q:qs[rnd(qs.length)]}));
-    const rs=[6,5,4,3,'all'][rnd(5)],layout=['adj','skip'][rnd(2)];
-    const nn=2+rnd(3);
-    const cands=progressionCandidates(prog,rs,nn,layout);
-    const n=countVoicings(cands);
-    // 전수: 모든 조합의 비용
-    const all=[];
-    const rec=(k,prev,acc,path)=>{ if(k===cands.length){ all.push({acc,key:path.join('|')}); return; } cands[k].forEach((b,j)=>rec(k+1,b,acc+(prev&&b?moveCost(prev,b):0),[...path,j])); };
-    rec(0,null,0,[]);
-    const realAll=cands.some(c=>c[0]!==null)?all.length:0;
-    eq(n,realAll,`보이싱 ${trial}: 가짓수`);
-    if(!n) continue;
-    const r=rankVoicings(cands);
-    const sorted=all.map(x=>x.acc).sort((a,b)=>a-b);
-    const keys=new Set();
-    const lim=Math.min(n,300);
-    for(let k=0;k<lim;k++){
-      const v=r.get(k);
-      if(!v){ fails.push(`보이싱 ${trial}: ${k}번째 없음 (총 ${n})`); break; }
-      if(Math.abs(v.total-sorted[k])>1e-6) fails.push(`보이싱 ${trial}: ${k}번째 비용 ${v.total} != ${sorted[k]}`);
-      const key=v.pick.map(x=>x?x.notes.map(m=>m?m.fret:'x').join(','):'-').join('|');
-      if(keys.has(key)) fails.push(`보이싱 ${trial}: 중복`);
-      keys.add(key);
-    }
-    if(n<=300&&r.get(n)!==null) fails.push(`보이싱 ${trial}: 가짓수보다 많이 나옴`);
-    if(nn===4){
-      // 음 개수 4 = 모든 구성음: 최소 이동 계산과 1번째가 같다
-      const best=planProgression(prog,rs,[true,true,true,true],layout);
-      if(Math.abs(r.get(0).total-best.total)>1e-6) fails.push(`보이싱 ${trial}: 1번째 ${r.get(0).total} != 최소 ${best.total}`);
-    }
+  // 코드 하나 목록(collectN): 같은 운지는 하나만, 낮은 프렛부터
+  for(const qq of QUALITIES) for(const n of [1,2,3,4,5,6]) for(const rs of [6,4,'all']){
+    const r=collectN(4,qq.id,rs,false,n,'any',0,null);
+    const keys=r.map(x=>x.notes.map(m=>m?m.fret:'x').join(','));
+    if(new Set(keys).size!==keys.length) fails.push(`collectN 중복 ${qq.id} ${n} ${rs}`);
+    for(let i=1;i<r.length;i++) if(Math.min(...r[i].notes.filter(Boolean).map(m=>m.fret))<Math.min(...r[i-1].notes.filter(Boolean).map(m=>m.fret))) fails.push(`collectN 정렬 ${qq.id} ${n} ${rs}`);
   }
-  // 큰 진행도 앞쪽은 빠르게 나온다
-  const big=progressionCandidates(Array.from({length:8},(_,i)=>({root:(i*5)%12,q:['m7','7','maj7'][i%3]})),'all',4,'adj');
-  const rb=rankVoicings(big);
-  let last=-1;
-  for(let k=0;k<200;k++){ const v=rb.get(k); if(v.total<last-1e-9) fails.push('큰 진행: 비용 순서'); last=v.total; }
-  if(!(countVoicings(big)>1e6)) fails.push('큰 진행 가짓수 '+countVoicings(big));
 }
 
 // 'any'(붙여서 + 쉘): 폼 수는 둘의 합이고, hasForms도 둘 중 하나라도 있으면 true
@@ -342,30 +258,6 @@ let progChecks=0;
   console.log(`프렛 하한 ${checked}개 검사`);
 }
 
-// 진행의 줄 배치 자동 선택
-{
-  const {autoLayout,progressionCandidates,rankVoicings,isShell}=L;
-  let seed=777;
-  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  let anyCount=0;
-  for(let trial=0;trial<120;trial++){
-    const prog=Array.from({length:2+rnd(4)},()=>({root:rnd(12),q:QUALITIES[rnd(QUALITIES.length)].id}));
-    const rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)];
-    const lay=autoLayout(prog,rs,n);
-    if(!['adj','any'].includes(lay)) fails.push(`autoLayout 값 ${lay}`);
-    const adj=progressionCandidates(prog,rs,n,'adj'),any=progressionCandidates(prog,rs,n,'any');
-    const miss=c=>c.filter(x=>x[0]===null).length;
-    const best=c=>{ const r=rankVoicings(c).get(0); return r?r.total:Infinity; };
-    if(lay==='any'){
-      anyCount++;
-      if(!(miss(any)<miss(adj)||best(any)<best(adj)-1e-9)) fails.push(`autoLayout any인데 이득이 없음 ${JSON.stringify(prog)} ${rs} ${n}`);
-    }else if(miss(any)<miss(adj)||best(any)<best(adj)-1e-9) fails.push(`autoLayout adj인데 any가 이득 ${JSON.stringify(prog)} ${rs} ${n}`);
-    // 붙여서만 쓰기로 했으면 쉘 폼은 하나도 없다
-    if(lay==='adj') adj.forEach(c=>c.forEach(r=>{ if(r&&isShell(r)) fails.push('adj 후보에 쉘'); }));
-  }
-  console.log(`줄 배치 자동 선택 120개 검사 (쉘 포함 ${anyCount}개)`);
-}
-
 // 음 개수 1~6: 구성음보다 많으면 구성음을 겹쳐서 채운다
 {
   const {candidatesN,hasFormsN,hasFormsNAt,isShell}=L;
@@ -396,9 +288,9 @@ let progChecks=0;
   console.log(`음 개수 1~6 ${checked}개 폼 검사`);
 }
 
-// 코드별 맨 위 음 지정
+// 하이톤(맨 위 음): collectN의 필터가 전수 계산과 같다
 {
-  const {topIndex,topOf,hasTopAt,progressionCandidates,candidatesN,countVoicings}=L;
+  const {topIndex,hasTopAt,candidatesN,collectN,voicingFromFrets,fretsOf}=L;
   let seed=4242,checked=0;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
   for(let trial=0;trial<150;trial++){
@@ -406,32 +298,29 @@ let progChecks=0;
     const root=rnd(12),rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)],fm=[0,0,3,5][rnd(4)];
     const all=candidatesN(root,q.id,rs,n,'any',fm);
     for(let tp=0;tp<q.tones.length;tp++){
-      const c={root,q:q.id,top:tp};
-      // 직접 계산: 가장 높은 줄의 음 높이가 tp번째 구성음인 폼
       const want=all.filter(r=>{
         const hi=r.notes.filter(Boolean).sort((a,b)=>a.string-b.string)[0];
         return ((hi.pc-root+12)%12)===q.tones[tp];
       });
-      const got=progressionCandidates([c],rs,n,'any',fm)[0];
-      const ok=want.length?got.length===want.length&&got.every(r=>topIndex(r,c)===tp):got.length===1&&got[0]===null;
-      if(!ok) fails.push(`top 필터 ${q.id} ${root} rs${rs} n${n} fm${fm} top${tp}`);
+      const got=collectN(root,q.id,rs,false,n,'any',fm,tp);
+      if(fm>0&&got.length!==want.length) fails.push(`하이톤 필터 ${q.id} ${root} rs${rs} n${n} fm${fm} top${tp}: ${got.length} != ${want.length}`);
+      if(got.some(r=>topIndex(r,{root,q:q.id})!==tp)) fails.push(`하이톤이 다른 음 ${q.id} ${root} top${tp}`);
       if(hasTopAt(root,q.id,rs,n,'any',fm,tp)!==(want.length>0)) fails.push(`hasTopAt ${q.id} ${root} top${tp}`);
       checked++;
     }
   }
-  // 범위를 벗어난 top은 무시한다
-  if(topOf({root:0,q:'maj',top:3})!==null) fails.push('범위 밖 top');
-  const base=progressionCandidates([{root:0,q:'maj'}],4,3,'any')[0].length;
-  if(progressionCandidates([{root:0,q:'maj',top:9}],4,3,'any')[0].length!==base) fails.push('범위 밖 top이 후보를 줄임');
-  // top을 지정하면 가짓수는 줄어들기만 한다
-  const prog=[{root:2,q:'maj'},{root:9,q:'maj'},{root:11,q:'m7'},{root:2,q:'maj'}];
-  const free=countVoicings(progressionCandidates(prog,'all',2,'any'));
-  const fixed=countVoicings(progressionCandidates(prog.map(c=>({...c,top:1})),'all',2,'any'));
-  if(!(fixed<=free)) fails.push('top 지정이 가짓수를 늘림');
-  console.log(`맨 위 음 ${checked}개 검사 (가짓수 ${free} → ${fixed})`);
+  console.log(`하이톤 ${checked}개 검사`);
+  // 저장한 운지에서 폼을 그대로 되살린다 (진행에 담은 폼)
+  let same=0;
+  for(const q of QUALITIES) for(const n of [1,2,3,4,5,6]) for(const root of [0,4,9]) for(const x of collectN(root,q.id,'all',false,n,'any',0,null)){
+    const v=voicingFromFrets(root,q.id,fretsOf(x),x.baseFret);
+    const same1=JSON.stringify(v)===JSON.stringify({...x,canOctave:false,octaveApplied:false});
+    if(!same1&&(v.formName!==x.formName||v.bass!==x.bass||v.bassLabel!==x.bassLabel||v.baseFret!==x.baseFret||v.count!==x.count||JSON.stringify(v.notes)!==JSON.stringify(x.notes))) fails.push(`voicingFromFrets ${q.id} ${n} ${root}`);
+    same++;
+  }
+  console.log(`저장 운지 복원 ${same}개 검사`);
 }
 
-console.log(`진행 ${progChecks}개 검사`);
 console.log(`조합 ${combos}개 (폼 없는 조합 ${impossible}개) 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }
 console.log('모든 검사 통과');
