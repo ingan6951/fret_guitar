@@ -81,7 +81,7 @@ test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=
   const t=boot();
   assert.equal(t.container.querySelector('button[data-k="lay"]'),null);
   assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/); // 4음은 쉘이 없다
-  t.click('t','2'); t.click('rs','6'); // 5도를 끄면 근음·♭3·♭7: 붙여서 + 쉘
+  t.click('t','2'); t.click('rs','5'); // 5도를 끄면 근음·♭3·♭7: 붙여서 + 쉘
   assert.match(t.container.querySelector('.cards').textContent,/쉘/);
   // 근음만 켜면 한 줄짜리라 쉘이 없다
   t.click('t','1'); t.click('t','3');

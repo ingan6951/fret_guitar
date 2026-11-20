@@ -266,7 +266,7 @@ export default function FretGuide(){
             </div>
           </div>
           <details className="set">
-            <summary aria-label="설정">⚙ 설정</summary>
+            <summary aria-label="보기">⚙ 보기</summary>
             <div className="setbody">
               <div className="seg compact" role="group" aria-label="표시 방식">
                 {LABELS.map(([v,l])=><Chip key={v} k="label" v={v} on={label===v} onPick={pick}>{l}</Chip>)}

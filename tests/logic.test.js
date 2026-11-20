@@ -27,7 +27,9 @@ function refStrings(b,n,layout){
     pick(i+1,chosen);
   };
   if(n===1) out.push([b]); else pick(0,[]);
-  return out;
+  if(layout!=='skip') return out;
+  // 쉘 제한: 베이스 바로 위 줄이나 4번 줄을 비우는 폼은 없다
+  return out.filter(arr=>{ const gap=[];for(let x=b-1;x>low;x--) if(!arr.includes(x)) gap.push(x); return gap.every(x=>x!==b-1&&x!==4); });
 }
 
 let combos=0,impossible=0;
@@ -141,19 +143,15 @@ QUALITIES.forEach(q=>{
   eq(collect(0,'maj',4,false,[true,true,true,true]).length,collect(0,'maj',4,false,[true,true,true,false]).length,'트라이어드는 7도 토글 무시');
   // 7도만 켠 트라이어드는 폼이 없다
   eq(hasForms('maj',4,[false,false,false,true]),false,'트라이어드에서 7도만 켬');
-  // 쉘: C7, 6번 줄 베이스 R–♭7–3 → 6번 줄 8, 5번 줄 뮤트, 4번 줄 8, 3번 줄 9
-  const shell=collect(0,'7',6,false,[true,true,false,true],'skip');
-  const s1=shell.find(r=>r.formName==='R–♭7–3');
-  eq(s1&&s1.notes.map(n=>n?n.fret:null),[8,null,8,9,null,null],'C7 쉘 R–♭7–3 (6번 줄)');
-  eq(s1&&s1.notes.map(n=>n?n.finger:null),[1,null,2,3,null,null],'C7 쉘 손가락');
-  // 쉘: Cmaj7, 5번 줄 베이스 R–7–3 → 5번 줄 3, 4번 줄 뮤트, 3번 줄 4, 2번 줄 5
-  const s2=collect(0,'maj7',5,false,[true,true,false,true],'skip').find(r=>r.formName==='R–7–3');
-  eq(s2&&s2.notes.map(n=>n?n.fret:null),[null,3,null,4,5,null],'Cmaj7 쉘 R–7–3 (5번 줄)');
-  eq(s2&&s2.notes.map(n=>n?n.finger:null),[null,1,null,2,3,null],'Cmaj7 쉘 손가락');
-  // 개방 위치는 실제 누르는 프렛으로 번호를 매긴다
-  // C7 쉘 6번 줄 베이스 3–R–♭7: 6번 줄 개방(E), 5번 줄 3(C), 3번 줄 3(B♭) → 1·2번 손가락
-  const op=collect(0,'7',6,false,[true,true,false,true],'skip').find(r=>r.formName==='3–R–♭7'&&r.baseFret===0);
-  eq(op&&op.notes.map(n=>n?[n.fret,n.finger]:null),[[0,null],[3,1],null,[3,2],null,null],'C7 쉘 개방 위치 손가락');
+  // 쉘 제한: 비운 줄은 베이스 바로 위도, 4번 줄도 아니다
+  //   6번 줄 베이스 3음(6·4·3, 6·5·3)은 없고, 5번 줄 베이스 3음은 5·4·2(3번 줄을 비움)뿐, 4번 줄 베이스 3음은 4·3·1(2번 줄을 비움)뿐
+  const strs3=(b,q,t)=>[...new Set(collect(0,q,b,false,t,'skip').map(r=>r.notes.map((x,k)=>x?6-k:'-').filter(x=>x!=='-').join('')))];
+  eq(strs3(6,'7',[true,true,false,true]),[],'6번 줄 베이스 3음 쉘은 없다');
+  eq(strs3(5,'7',[true,true,false,true]),['542'],'5번 줄 베이스 3음 쉘은 5·4·2');
+  eq(strs3(4,'maj7',[true,true,false,true]),['431'],'4번 줄 베이스 3음 쉘은 4·3·1');
+  // 4음 쉘: 6번 줄 베이스는 6·5·4·2(3번 줄 비움)만, 5번 줄 베이스는 5·4·2·1
+  eq(strs3(6,'7',[true,true,true,true]),['6542'],'6번 줄 베이스 4음 쉘');
+  eq(strs3(5,'7',[true,true,true,true]),['5421','5431'],'5번 줄 베이스 4음 쉘');
   // Am7 붙여서 5번 줄 베이스 R–5–♭7–♭3: x02010 → 2번 줄 1프렛 1번, 4번 줄 2프렛 2번
   const am=collect(9,'m7',5,false,[true,true,true,true]).find(r=>r.formName==='R–5–♭7–♭3'&&r.baseFret===0);
   eq(am&&am.notes.map(n=>n?[n.fret,n.finger]:null),[null,[0,null],[2,2],[0,null],[1,1],null],'Am7 개방 위치 손가락');
