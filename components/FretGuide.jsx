@@ -1,20 +1,12 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt,hasTopAt} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,collectN,handPos,progressionCandidates,countVoicings,rankVoicings,isShell,autoLayout,hasFormsNAt,hasTopAt} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const RS_ORDER=['all',1,2,3,4,5,6]; // 베이스 스테퍼 순서: 전체 → 1번 줄 … 6번 줄
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
-// 자주 쓰는 구성음 조합. 도수 이름으로 고르므로 코드 종류가 바뀌어도 같은 뜻을 유지한다. min은 필요한 최소 구성음 수.
-const PRESETS=[
-  {id:'all',label:'전부',pick:()=>true},
-  {id:'guide',label:'3·7',pick:d=>/^♭?3$/.test(d)||/7$/.test(d),min:2},
-  {id:'rootless',label:'근음 빼기',pick:d=>d!=='R'},
-  {id:'r5',label:'근음+5',pick:d=>d==='R'||d==='5',min:2}
-];
-const presetT=(p,q)=>[0,1,2,3].map(i=>i<q.deg.length&&p.pick(q.deg[i]));
 const degName=d=>d==='R'?'1':d;
 const PN_MAX=6;
 
@@ -36,7 +28,8 @@ export default function FretGuide(){
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
   useEffect(()=>{ if(typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(min-width:920px)').matches) setAdvOpen(true); },[]);
 
-  const withTop=s=>{ const n=QUALITIES.find(x=>x.id===s.q).tones.length; return Number.isInteger(s.top)&&s.top<n?{root:s.root,q:s.q,top:s.top}:{root:s.root,q:s.q}; };
+  // v: 화면에서 실제로 적용 중인 하이톤(구성음 인덱스, 자동이면 빈 문자열)
+  const withTop=(s,v)=>v===''||v===undefined?{root:s.root,q:s.q}:{root:s.root,q:s.q,top:Number(v)};
   const pick=(k,v)=>setState(s=>{
     switch(k){
       case 'root': return {...s,root:Number(v)};
@@ -44,13 +37,11 @@ export default function FretGuide(){
       case 'rs': return {...s,rs:v==='all'?'all':Number(v)};
       case 'label': return {...s,label:v};
       case 'mode': return {...s,mode:v};
-      case 'preset': { const p=PRESETS.find(x=>x.id===v); const qq=QUALITIES.find(x=>x.id===s.q); return p?{...s,t:presetT(p,qq)}:s; }
       case 'acc': return {...s,flat:v==='flat'};
       case 'oct': return {...s,octave:!s.octave};
-      case 't': { const t=s.t.slice(); t[Number(v)]=!t[Number(v)]; return {...s,t}; }
       case 'top': return {...s,top:v===''?null:Number(v)};
-      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,withTop(s)],progDone:false}:s;
-      case 'pupd': { const i=Number(v); return s.prog[i]?{...s,prog:s.prog.map((c,j)=>j===i?withTop(s):c),progDone:false}:s; }
+      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,withTop(s,v)],progDone:false}:s;
+      case 'pupd': { const [i0,topV]=String(v).split(':'); const i=Number(i0); return s.prog[i]?{...s,prog:s.prog.map((c,j)=>j===i?withTop(s,topV):c),progDone:false}:s; }
       case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v)),progDone:false};
       case 'pclear': return {...s,prog:[],progDone:false};
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
@@ -62,14 +53,17 @@ export default function FretGuide(){
     }
   });
 
-  const {root,q:qid,rs,t,fmin,label,flat,octave,mode,prog,progDone,progN,top}=state;
+  const {root,q:qid,rs,fmin,label,flat,octave,mode,prog,progDone,progN,top}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
   const isProg=mode==='prog';
 
-  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any',fmin),[isProg,root,qid,rs,octave,t,fmin]);
+  // 하이톤: 지금 조건으로 그 음이 맨 위인 폼이 있어야 고를 수 있다 (코드 하나·진행 공통)
+  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,'any',fmin,i);
+  const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
+  const list=useMemo(()=>isProg?[]:collectN(root,qid,rs,octave,progN,'any',fmin,topEff),[isProg,root,qid,rs,octave,progN,fmin,topEff]);
   // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
   const showResult=isProg&&progDone&&prog.length>0;
   const selOk=sel!==null&&sel<prog.length?sel:null;
@@ -100,32 +94,18 @@ export default function FretGuide(){
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
   // 진행 보기에서는 구성음 대신 음 개수(progN)로 판단한다
   // 프렛 하한이 있으면 근음에 따라 폼 유무가 달라지므로 근음도 함께 넘긴다
-  const hasAt=(rt,id,r,tt,fm)=>isProg?hasFormsNAt(rt,id,r,progN,'any',fm):hasFormsAt(rt,id,r,tt,'any',fm);
-  const has=(id,r)=>hasAt(root,id,r,t,fmin);
-  const rootOff=i=>i!==root&&!hasAt(i,qid,rs,t,fmin);
+  const hasAt=(rt,id,r,fm)=>hasFormsNAt(rt,id,r,progN,'any',fm);
+  const has=(id,r)=>hasAt(root,id,r,fmin);
+  const rootOff=i=>i!==root&&!hasAt(i,qid,rs,fmin);
   const qOff=id=>id!==qid&&!has(id,rs);
   // 베이스 스테퍼: 폼이 없는 값은 건너뛰고 가장 가까운 값으로 간다. 갈 곳이 없으면 null
   const rsNext=d=>{ for(let i=RS_ORDER.indexOf(rs)+d;i>=0&&i<RS_ORDER.length;i+=d) if(has(qid,RS_ORDER[i])) return RS_ORDER[i]; return null; };
-  // 맨 위 음: 지금 근음·코드·베이스·음 개수·프렛으로 그 음이 맨 위인 폼이 있어야 고를 수 있다
-  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,'any',fmin,i);
-  const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
   const topTag=c=>Number.isInteger(c.top)?degName(QUALITIES.find(x=>x.id===c.q).deg[c.top]):'';
   const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
   // 하한을 올릴수록 폼은 줄어들기만 하므로, 다음 숫자에 폼이 없으면 + 는 막는다
-  const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,t,fmin+1);
-  // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
-  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasFormsAt(root,qid,rs,next,'any',fmin); };
-
-  const presetOff=p=>{
-    const pt=presetT(p,q);
-    if(pt.filter(Boolean).length<(p.min||1)) return true;
-    const same=JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,pt));
-    return !same&&!hasFormsAt(root,qid,rs,pt,'any',fmin);
-  };
-  const presetOn=p=>JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,presetT(p,q)));
+  const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,fmin+1);
   // 접어 둔 상세 조건에 현재 값을 한 줄로 보여 준다
-  const advSummary=(isProg?`${progN}음`:`구성음 ${maskFor(qid,t).map(i=>degName(q.deg[i])).join('·')}`)
-    +` · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`+(fmin?` · ${fmin}프렛 이상`:'');
+  const advSummary=`${progN}음 · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`+(fmin?` · ${fmin}프렛 이상`:'');
 
   const stepOf=el=>el.children.length>1?el.children[1].offsetLeft-el.children[0].offsetLeft:el.clientWidth;
   const slide=d=>{
@@ -154,8 +134,8 @@ export default function FretGuide(){
         <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
         {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}{isShell(res)?' · 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':''}</p>}
       </figure>
-    )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
-    count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`;
+    )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>음 개수나 베이스를 바꿔 보세요.</p></div>;
+    count=`폼 ${list.length}개 · ${progN}음`;
   }else if(!showResult){
     cards=<div className="empty">{prog.length
       ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>&quot;상세 조건&quot;의 음 개수에 맞는 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
@@ -208,11 +188,17 @@ export default function FretGuide(){
               {QUALITIES.map(x=><option key={x.id} value={x.id} disabled={qOff(x.id)}>{x.label}</option>)}
             </select>
           </div>
+          <div className="group">
+            <h2 id="h-top">하이톤</h2>
+            <select className="sel" data-k="top" aria-labelledby="h-top" value={topEff===null?'':String(topEff)} onChange={e=>pick('top',e.target.value)}>
+              <option value="">자동</option>
+              {q.tones.map((iv,i)=>(<option key={i} value={String(i)} disabled={topOff(i)}>{degName(q.deg[i])} ({nm[(root+iv)%12]})</option>))}
+            </select>
+          </div>
         </div>
         <details className="adv" open={advOpen} onToggle={e=>setAdvOpen(e.currentTarget.open)}>
           <summary><b>상세 조건</b><span>{advSummary}</span></summary>
           <div className="advbody">
-        {isProg?(
           <div className="group">
             <h2 id="h-n">음 개수</h2>
             <div className="stepper" role="group" aria-labelledby="h-n">
@@ -221,21 +207,6 @@ export default function FretGuide(){
               <Chip k="pnstep" v="1" disabled={progN>=PN_MAX||pnOff(progN+1)} onPick={pick} aria-label="음 개수 늘리기">+</Chip>
             </div>
           </div>
-          ):(
-          <div className="group">
-            <h2 id="h-t">구성음</h2>
-            <div className="seg compact presets" role="group" aria-label="구성음 프리셋">
-              {PRESETS.map(p=><Chip key={p.id} k="preset" v={p.id} on={presetOn(p)} disabled={presetOff(p)} onPick={pick}>{p.label}</Chip>)}
-            </div>
-            <div className="seg row4" role="group" aria-labelledby="h-t">
-              {[0,1,2,3].map(i=>(
-                <Chip key={i} k="t" v={String(i)} on={i<q.tones.length&&t[i]} disabled={tOff(i)} onPick={pick}>
-                  <span>{i<q.tones.length?degName(q.deg[i]):'–'}</span><small>{i<q.tones.length?nm[(root+q.tones[i])%12]:''}</small>
-                </Chip>
-              ))}
-            </div>
-          </div>
-          )}
           <div className="group">
             <h2 id="h-rs">베이스</h2>
             <div className="stepper" role="group" aria-labelledby="h-rs">
@@ -295,18 +266,12 @@ export default function FretGuide(){
               {selOk!==null&&(
                 <div className="prog-actions sel-actions">
                   <span className="selname">{selOk+1}번째 {chordName(prog[selOk])}</span>
-                  <Chip k="pupd" v={String(selOk)} disabled={prog[selOk].root===root&&prog[selOk].q===qid&&(Number.isInteger(prog[selOk].top)?prog[selOk].top:null)===topEff} onPick={pickSel}>수정 → {sym}</Chip>
+                  <Chip k="pupd" v={String(selOk)} disabled={prog[selOk].root===root&&prog[selOk].q===qid&&(Number.isInteger(prog[selOk].top)?prog[selOk].top:null)===topEff} onPick={(k,v)=>pickSel(k,`${v}:${topEff===null?'':topEff}`)}>수정 → {sym}</Chip>
                   <Chip k="pdel" v={String(selOk)} onPick={pickSel}>제거</Chip>
                 </div>
               )}
-              <label className="pair toprow"><span>맨 위 음</span>
-                <select className="sel" data-k="top" aria-label="맨 위 음" value={topEff===null?'':String(topEff)} onChange={e=>pick('top',e.target.value)}>
-                  <option value="">자동</option>
-                  {q.tones.map((iv,i)=>(<option key={i} value={String(i)} disabled={topOff(i)}>{degName(q.deg[i])} ({nm[(root+iv)%12]})</option>))}
-                </select>
-              </label>
               <div className="prog-actions">
-                <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={pick}>+ {sym} 추가</Chip>
+                <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={()=>pick('padd',topEff===null?'':String(topEff))}>+ {sym} 추가</Chip>
                 <Chip k="pclear" v="" disabled={!prog.length} onPick={pick}>비우기</Chip>
                 <Chip k="pfind" v="" className="chip find" disabled={!prog.length} onPick={pick}>보이싱 찾기</Chip>
               </div>

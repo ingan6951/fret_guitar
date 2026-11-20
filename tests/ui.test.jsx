@@ -61,41 +61,49 @@ test('m7 4음: 베이스 1~3은 비활성, 근음은 항상 활성, 비활성 �
   assert.equal(t.state().rs,'all');
 });
 
-test('구성음: 마지막 하나는 끌 수 없고 트라이어드의 7도는 비활성',()=>{
+test('코드 하나만 볼 때도 음 개수 − + 와 하이톤을 쓴다 (진행과 같은 조건)',()=>{
   const t=boot();
-  t.click('q','maj'); t.click('t','1'); t.click('t','2');
-  assert.deepEqual(t.state().t.slice(0,3),[true,false,false]);
-  assert.equal(t.flags('t')['0'],true);
-  assert.equal(t.flags('t')['3'],true);
-});
-
-test('7도만 켜면 트라이어드로 못 바꾼다',()=>{
-  const t=boot();
-  t.click('t','0'); t.click('t','1'); t.click('t','2');
-  assert.deepEqual(t.state().t,[false,false,false,true]);
-  const f=t.flags('q');
-  assert.deepEqual([f.maj,f.min,f['7'],f.maj7,f.m7],[true,true,false,false,false]);
+  assert.equal(t.container.querySelector('button[data-k="t"]'),null,'구성음 칩은 없다');
+  assert.equal(t.container.querySelector('button[data-k="preset"]'),null,'구성음 프리셋도 없다');
+  const val=()=>t.container.querySelector('#h-n').nextElementSibling.querySelector('output').textContent;
+  assert.equal(val(),'4');
+  // 베이스 4번 줄에서는 5음 이상이 없어 + 가 막힌다
+  assert.equal(t.btn('pnstep','1').disabled,true);
+  t.click('pnstep','-1');
+  assert.equal(t.state().progN,3);
+  assert.match(t.count(),/3음/);
+  for(const svg of t.container.querySelectorAll('.cards svg')) assert.equal(svg.querySelectorAll('.dot,.open').length,3,'3음 폼');
+  // 하이톤: 자동 + 구성음 도수, 고르면 그 음이 맨 위인 폼만 남는다
+  const top=t.container.querySelector('select[data-k="top"]');
+  assert.deepEqual([...top.options].map(o=>o.value),['','0','1','2','3']);
+  t.click('top','1');
+  assert.equal(t.state().top,1);
+  assert.ok(t.svgs()>0);
+  t.click('top','');
+  assert.equal(t.state().top,null);
+  // 하이톤은 근음·코드 다음 칸에 있다
+  const order=[...t.container.querySelectorAll('.rail .pair select')].map(x=>x.dataset.k);
+  assert.deepEqual(order,['root','q','top']);
 });
 
 test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=>{
   const t=boot();
   assert.equal(t.container.querySelector('button[data-k="lay"]'),null);
   assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/); // 4음은 쉘이 없다
-  t.click('t','2'); t.click('rs','5'); // 5도를 끄면 근음·♭3·♭7: 붙여서 + 쉘
+  t.click('pnstep','-1'); t.click('rs','5'); // 3음, 5번 줄 베이스: 붙여서 + 5·4·2번 줄 쉘
   assert.match(t.container.querySelector('.cards').textContent,/쉘/);
-  // 근음만 켜면 한 줄짜리라 쉘이 없다
-  t.click('t','1'); t.click('t','3');
-  assert.deepEqual(t.state().t.slice(0,4),[true,false,false,false]);
+  // 1음은 한 줄짜리라 쉘이 없다
+  t.click('pnstep','-1'); t.click('pnstep','-1');
+  assert.equal(t.state().progN,1);
   assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
 });
 
 test('모든 코드·구성음·베이스 조합이 화면을 깨지 않는다',()=>{
   let n=0;
-  for(const q of QUALITIES) for(let m=1;m<16;m++) for(const rs of [1,3,4,6,'all']){
-    const t=[0,1,2,3].map(i=>!!(m&(1<<i)));
-    const r=boot({root:n%12,q:q.id,rs,t,label:['finger','note','degree'][n%3],flat:n%2===0});
+  for(const q of QUALITIES) for(let m=1;m<=6;m++) for(const rs of [1,3,4,6,'all']){
+    const r=boot({root:n%12,q:q.id,rs,progN:m,top:n%5===0?n%4:null,label:['finger','note','degree'][n%3],flat:n%2===0});
     // 불가능한 저장값은 복구되므로 항상 폼이 있다
-    assert.ok(r.svgs()>0,`빈 화면 ${q.id} ${m} ${rs}`);
+    assert.ok(r.svgs()>0,`빈 화면 ${q.id} ${m}음 ${rs}`);
     cleanup(); localStorage.clear(); n++;
   }
 });
@@ -104,7 +112,7 @@ test('아무렇게나 눌러도(비활성은 무시) 빈 화면에 닿지 않는
   const t=boot();
   let seed=12345;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const keys=['root','q','rs','t','fstep','label','acc'];
+  const keys=['root','q','rstep','pnstep','top','fstep','label','acc'];
   for(let i=0;i<600;i++){
     const k=keys[rnd(keys.length)];
     const s=t.container.querySelector(`select[data-k="${k}"]`);
@@ -130,43 +138,28 @@ test('옥타브 토글',()=>{
 
 test('설정 저장·복원, 불가능하거나 잘못된 저장값 복구',()=>{
   const a=boot();
-  a.click('root','2'); a.click('q','7'); a.click('rs','5'); a.click('t','0'); a.click('label','degree'); a.click('acc','flat');
+  a.click('root','2'); a.click('q','7'); a.click('rs','5'); a.click('pnstep','-1'); a.click('top','2'); a.click('label','degree'); a.click('acc','flat');
   const saved=a.state();
-  assert.deepEqual(saved.t,[false,true,true,true]);
+  assert.equal(saved.progN,3);
+  assert.equal(saved.top,2);
   cleanup();
   const b=boot(JSON.stringify(saved));
   assert.deepEqual(b.state(),saved);
   cleanup(); localStorage.clear();
-  const c=boot({root:0,q:'7',rs:1,t:[true,true,true,true]});
+  const c=boot({root:0,q:'7',rs:1});
   assert.ok(c.svgs()>0); assert.equal(c.state().rs,4);
   cleanup(); localStorage.clear();
-  const d=boot({root:3,q:'maj',rs:4,n:5});
-  assert.deepEqual(d.state().t,[true,true,true,true]);
+  const d=boot({root:3,q:'maj',rs:4,progN:9,top:3});
+  assert.equal(d.state().progN,4);
+  assert.equal(d.state().top,null,'트라이어드에 없는 하이톤은 자동으로');
   cleanup(); localStorage.clear();
   const e=boot('{broken');
   assert.equal(e.container.querySelector('.sym').textContent,'Am7');
 });
 
-test('구성음 프리셋: 적용·눌림 표시, 트라이어드에서는 3·7이 비활성',()=>{
-  const t=boot();
-  t.click('preset','guide');
-  assert.deepEqual(t.state().t,[false,true,false,true]);
-  assert.equal(t.btn('preset','guide').getAttribute('aria-pressed'),'true');
-  assert.equal(t.btn('preset','all').getAttribute('aria-pressed'),'false');
-  assert.ok(t.svgs()>0);
-  t.click('preset','rootless');
-  assert.deepEqual(t.state().t,[false,true,true,true]);
-  assert.ok(t.svgs()>0);
-  t.click('preset','all');
-  assert.deepEqual(t.state().t,[true,true,true,true]);
-  t.click('q','maj');
-  assert.equal(t.flags('preset').guide,true);
-  assert.equal(t.flags('preset').all,false);
-});
-
 test('상세 조건 요약 줄과 카드 제목',()=>{
   const t=boot();
-  assert.match(t.container.querySelector('.adv summary span').textContent,/구성음 1·♭3·5·♭7 · 베이스 4번 줄/);
+  assert.match(t.container.querySelector('.adv summary span').textContent,/4음 · 베이스 4번 줄/);
   t.click('rs','all');
   assert.match(t.container.querySelector('.adv summary span').textContent,/베이스 전체/);
   t.click('rs','4');
@@ -252,8 +245,8 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.equal(b.state().prog.length,8); assert.equal(b.state().mode,'prog'); assert.equal(b.state().progDone,true);
   assert.ok(b.svgs()>0,'저장된 결과 화면 복원');
   b.click('pedit','');
-  // 코드 보기로 돌아가면 구성음 칩이 다시 보인다
-  b.click('mode','chord'); assert.ok(b.btn('t','0')); assert.equal(b.container.querySelector('button[data-k="pn"]'),null); b.click('mode','prog');
+  // 코드 보기로 돌아가도 음 개수와 하이톤은 그대로 있다
+  b.click('mode','chord'); assert.ok(b.container.querySelector('select[data-k="top"]')); assert.ok(b.btn('pnstep','1')); b.click('mode','prog');
   b.click('pclear','');
   assert.deepEqual(b.state().prog,[]);
   b.click('mode','chord');
@@ -361,8 +354,8 @@ test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 �
   assert.equal(next().disabled,true);
   t.click('rs','all');
   assert.match(pos(),/^1 \//);
-  // 구성음을 근음 하나만 켜고 베이스를 고정하면 폼이 하나라 넘기기가 없다
-  t.click('t','1'); t.click('t','2'); t.click('t','3'); t.click('rs','4');
+  // 하이톤을 ♭3으로 고정하고 베이스도 고정하면 폼이 하나라 넘기기가 없다
+  t.click('top','1'); t.click('rs','4');
   assert.equal(t.svgs(),1);
   assert.equal(t.container.querySelector('.slidenav'),null);
 });
@@ -397,6 +390,6 @@ test('프렛 하한: − 0 + 로 올리고 내리며, 그 프렛 이상만 잡�
   assert.equal(b.state().fmin,JSON.parse(saved).fmin);
   // 불가능해진 저장값(폼이 없는 하한)은 전체로 돌아간다
   cleanup(); localStorage.clear();
-  const c=boot({root:0,q:'m7',rs:6,t:[true,true,true,true],fmin:12});
+  const c=boot({root:0,q:'m7',rs:6,fmin:12});
   assert.ok(c.svgs()>0);
 });
