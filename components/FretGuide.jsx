@@ -29,6 +29,7 @@ export default function FretGuide(){
   const [state,setState]=useState(DEFAULT);
   const [ready,setReady]=useState(false);
   const [vi,setVi]=useState(0); // 진행 결과에서 보고 있는 보이싱 순번 (0부터)
+  const [sel,setSel]=useState(null); // 진행에서 고른 코드 칩의 순번 (수정·제거 대상)
   const [advOpen,setAdvOpen]=useState(false); // 상세 조건 펼침 (넓은 화면에서는 처음부터 펼친다)
 
   useEffect(()=>{ const s=loadState(); if(s) setState(s); setReady(true); },[]);
@@ -47,6 +48,7 @@ export default function FretGuide(){
       case 'oct': return {...s,octave:!s.octave};
       case 't': { const t=s.t.slice(); t[Number(v)]=!t[Number(v)]; return {...s,t}; }
       case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,{root:s.root,q:s.q}],progDone:false}:s;
+      case 'pupd': { const i=Number(v); return s.prog[i]?{...s,prog:s.prog.map((c,j)=>j===i?{root:s.root,q:s.q}:c),progDone:false}:s; }
       case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v)),progDone:false};
       case 'pclear': return {...s,prog:[],progDone:false};
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
@@ -66,6 +68,15 @@ export default function FretGuide(){
   const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any'),[isProg,root,qid,rs,octave,t]);
   // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
   const showResult=isProg&&progDone&&prog.length>0;
+  const selOk=sel!==null&&sel<prog.length?sel:null;
+  // 진행의 코드 칩을 누르면 그 코드가 선택되고(근음·코드 선택에도 불러옴), 다시 누르면 선택이 풀린다.
+  // 결과 화면에서 누르면 진행 편집 화면으로 돌아온다.
+  const choose=i=>{
+    if(selOk===i&&!showResult){ setSel(null); return; }
+    setSel(i);
+    setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q,progDone:false}:s);
+  };
+  const pickSel=(k,v)=>{ pick(k,v); setSel(null); };
   const rank=useMemo(()=>{
     if(!showResult) return null;
     // 줄 배치는 진행에 맞게 자동으로 정한다 (붙여서 우선, 쉘을 섞어야 이동이 줄 때만 쉘 포함)
@@ -197,7 +208,7 @@ export default function FretGuide(){
           </div>
           </div>
         </details>
-        <Chip k="mode" v={isProg?'chord':'prog'} className="chip modebtn" onPick={pick}>{isProg?'← 코드 하나만 보기':'+ 진행 만들기'}</Chip>
+        <Chip k="mode" v={isProg?'chord':'prog'} className="chip modebtn" onPick={pick}>{isProg?'← 코드 하나만 보기':'진행 추가'}</Chip>
       </section>
 
       <main className="stage">
@@ -229,11 +240,19 @@ export default function FretGuide(){
               {prog.map((c,i)=>(
                 <span key={i} style={{display:'contents'}}>
                   {i>0&&<span className="arrow" aria-hidden="true">→</span>}
-                  <Chip k="pdel" v={String(i)} onPick={pick} aria-label={`${i+1}번째 ${chordName(c)} 빼기`}>{chordName(c)}<i aria-hidden="true">×</i></Chip>
+                  <button className="chip" type="button" data-k="psel" data-v={String(i)} aria-pressed={String(selOk===i)}
+                    aria-label={`${i+1}번째 ${chordName(c)} 선택`} onClick={()=>choose(i)}>{chordName(c)}</button>
                 </span>
               ))}
             </div>
             {!showResult&&<div className="picker">
+              {selOk!==null&&(
+                <div className="prog-actions sel-actions">
+                  <span className="selname">{selOk+1}번째 {chordName(prog[selOk])}</span>
+                  <Chip k="pupd" v={String(selOk)} disabled={prog[selOk].root===root&&prog[selOk].q===qid} onPick={pickSel}>수정 → {sym}</Chip>
+                  <Chip k="pdel" v={String(selOk)} onPick={pickSel}>제거</Chip>
+                </div>
+              )}
               <div className="prog-actions">
                 <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={pick}>+ {sym} 추가</Chip>
                 <Chip k="pclear" v="" disabled={!prog.length} onPick={pick}>비우기</Chip>

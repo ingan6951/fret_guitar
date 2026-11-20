@@ -218,9 +218,9 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.deepEqual(t.state().prog[3],{root:5,q:'maj7'});
   assert.deepEqual([t.state().root,t.state().q],[5,'maj7']);
   t.click('pfind',''); assert.equal(t.state().progDone,true);
-  t.click('pdel','3');
+  t.click('psel','3'); t.click('pdel','3');
   assert.equal(t.state().progDone,false,'진행을 바꾸면 결과를 닫는다');
-  t.click('pdel','1');
+  t.click('psel','1'); t.click('pdel','1');
   assert.deepEqual(t.state().prog,[{root:2,q:'m7'},{root:0,q:'maj7'}]);
   for(let i=0;i<10;i++) fireEvent.click(t.btn('padd',''));
   assert.equal(t.state().prog.length,8);
@@ -242,4 +242,37 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   cleanup(); localStorage.clear();
   const c=boot({mode:'prog',prog:[{root:3,q:'m7'},{root:99,q:'x'},null]});
   assert.deepEqual(c.state().prog,[{root:3,q:'m7'}]);
+});
+
+test('진행: 코드를 골라 수정·제거 (C–Am–Dm–G–C)',()=>{
+  const t=boot();
+  t.click('mode','prog');
+  for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj'],[0,'maj']]){ t.click('root',String(r)); t.click('q',q); t.click('padd',''); }
+  assert.equal(t.state().prog.length,5);
+  assert.equal(t.btn('pdel','1'),null,'고르기 전에는 제거 버튼이 없다');
+  // Am 선택: 근음·코드 선택에 불러오고, 바꾼 것이 없으면 수정은 비활성
+  t.click('psel','1');
+  assert.deepEqual([t.state().root,t.state().q],[9,'min']);
+  assert.equal(t.btn('psel','1').getAttribute('aria-pressed'),'true');
+  assert.equal(t.btn('pupd','1').disabled,true);
+  // 다시 누르면 선택이 풀린다
+  t.click('psel','1');
+  assert.equal(t.btn('pdel','1'),null);
+  // 수정: Am → Em
+  t.click('psel','1');
+  t.click('root','4');
+  assert.equal(t.btn('pupd','1').disabled,false);
+  t.click('pupd','1');
+  assert.deepEqual(t.state().prog.map(c=>`${c.root}${c.q}`),['0maj','4min','2min','7maj','0maj']);
+  assert.equal(t.btn('pupd','1'),null,'수정하면 선택이 풀린다');
+  // 제거: Dm
+  t.click('psel','2'); t.click('pdel','2');
+  assert.deepEqual(t.state().prog.map(c=>`${c.root}${c.q}`),['0maj','4min','7maj','0maj']);
+  assert.equal(t.btn('pdel','2'),null);
+  // 결과 화면에서 칩을 누르면 편집 화면으로 돌아온다
+  t.click('pfind','');
+  assert.equal(t.state().progDone,true);
+  t.click('psel','0');
+  assert.equal(t.state().progDone,false);
+  assert.ok(t.btn('pdel','0'));
 });
