@@ -306,6 +306,42 @@ let progChecks=0;
   if(!(countVoicings(big)>1e6)) fails.push('큰 진행 가짓수 '+countVoicings(big));
 }
 
+// 'any'(붙여서 + 쉘): 폼 수는 둘의 합이고, hasForms도 둘 중 하나라도 있으면 true
+{
+  for(const q of QUALITIES) for(const t of masks){
+    if(!maskFor(q.id,t).length) continue;
+    for(const rs of [6,5,4,3,2,1,'all']){
+      const a=collect(0,q.id,rs,false,t,'adj').length,k=collect(0,q.id,rs,false,t,'skip').length,any=collect(0,q.id,rs,false,t,'any').length;
+      eq(any,a+k,`any 폼 수 ${q.id} ${rs} ${maskFor(q.id,t)}`);
+      eq(hasForms(q.id,rs,t,'any'),a+k>0,`hasForms any ${q.id} ${rs} ${maskFor(q.id,t)}`);
+    }
+  }
+}
+
+// 진행의 줄 배치 자동 선택
+{
+  const {autoLayout,progressionCandidates,rankVoicings,isShell}=L;
+  let seed=777;
+  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
+  let anyCount=0;
+  for(let trial=0;trial<120;trial++){
+    const prog=Array.from({length:2+rnd(4)},()=>({root:rnd(12),q:QUALITIES[rnd(QUALITIES.length)].id}));
+    const rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)];
+    const lay=autoLayout(prog,rs,n);
+    if(!['adj','any'].includes(lay)) fails.push(`autoLayout 값 ${lay}`);
+    const adj=progressionCandidates(prog,rs,n,'adj'),any=progressionCandidates(prog,rs,n,'any');
+    const miss=c=>c.filter(x=>x[0]===null).length;
+    const best=c=>{ const r=rankVoicings(c).get(0); return r?r.total:Infinity; };
+    if(lay==='any'){
+      anyCount++;
+      if(!(miss(any)<miss(adj)||best(any)<best(adj)-1e-9)) fails.push(`autoLayout any인데 이득이 없음 ${JSON.stringify(prog)} ${rs} ${n}`);
+    }else if(miss(any)<miss(adj)||best(any)<best(adj)-1e-9) fails.push(`autoLayout adj인데 any가 이득 ${JSON.stringify(prog)} ${rs} ${n}`);
+    // 붙여서만 쓰기로 했으면 쉘 폼은 하나도 없다
+    if(lay==='adj') adj.forEach(c=>c.forEach(r=>{ if(r&&isShell(r)) fails.push('adj 후보에 쉘'); }));
+  }
+  console.log(`줄 배치 자동 선택 120개 검사 (쉘 포함 ${anyCount}개)`);
+}
+
 console.log(`진행 ${progChecks}개 검사`);
 console.log(`조합 ${combos}개 (폼 없는 조합 ${impossible}개) 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }

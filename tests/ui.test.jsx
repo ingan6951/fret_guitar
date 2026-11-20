@@ -59,22 +59,25 @@ test('7도만 켜면 트라이어드로 못 바꾼다',()=>{
   assert.deepEqual([f.maj,f.min,f['7'],f.maj7,f.m7],[true,true,false,false,false]);
 });
 
-test('쉘: m7 4음은 베이스 5·6만, 근음만 켜면 쉘 비활성',()=>{
+test('줄 배치 선택은 없고, 붙여서와 쉘 폼이 함께 나온다',()=>{
   const t=boot();
-  t.click('rs','all'); t.click('lay','skip');
-  assert.deepEqual(t.flags('rs'),{1:true,2:true,3:true,4:true,5:false,6:false,all:false});
-  t.click('lay','adj'); t.click('t','1'); t.click('t','2'); t.click('t','3');
-  assert.deepEqual(t.state().t,[true,false,false,false]);
-  assert.equal(t.flags('lay').skip,true);
+  assert.equal(t.container.querySelector('button[data-k="lay"]'),null);
+  assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/); // 4음은 쉘이 없다
+  t.click('t','2'); t.click('rs','6'); // 5도를 끄면 근음·♭3·♭7: 붙여서 + 쉘
+  assert.match(t.container.querySelector('.cards').textContent,/쉘/);
+  // 근음만 켜면 한 줄짜리라 쉘이 없다
+  t.click('t','1'); t.click('t','3');
+  assert.deepEqual(t.state().t.slice(0,4),[true,false,false,false]);
+  assert.doesNotMatch(t.container.querySelector('.cards').textContent,/쉘/);
 });
 
-test('모든 코드·구성음·줄 배치·베이스 조합이 화면을 깨지 않는다',()=>{
+test('모든 코드·구성음·베이스 조합이 화면을 깨지 않는다',()=>{
   let n=0;
-  for(const q of QUALITIES) for(let m=1;m<16;m++) for(const layout of ['adj','skip']) for(const rs of [1,3,4,6,'all']){
+  for(const q of QUALITIES) for(let m=1;m<16;m++) for(const rs of [1,3,4,6,'all']){
     const t=[0,1,2,3].map(i=>!!(m&(1<<i)));
-    const r=boot({root:n%12,q:q.id,rs,t,layout,label:['finger','note','degree'][n%3],flat:n%2===0});
+    const r=boot({root:n%12,q:q.id,rs,t,label:['finger','note','degree'][n%3],flat:n%2===0});
     // 불가능한 저장값은 복구되므로 항상 폼이 있다
-    assert.ok(r.svgs()>0,`빈 화면 ${q.id} ${m} ${layout} ${rs}`);
+    assert.ok(r.svgs()>0,`빈 화면 ${q.id} ${m} ${rs}`);
     cleanup(); localStorage.clear(); n++;
   }
 });
@@ -83,7 +86,7 @@ test('아무렇게나 눌러도(비활성은 무시) 빈 화면에 닿지 않는
   const t=boot();
   let seed=12345;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
-  const keys=['root','q','rs','t','lay','label','acc'];
+  const keys=['root','q','rs','t','label','acc'];
   for(let i=0;i<600;i++){
     const k=keys[rnd(keys.length)];
     const s=t.container.querySelector(`select[data-k="${k}"]`);
@@ -109,10 +112,9 @@ test('옥타브 토글',()=>{
 
 test('설정 저장·복원, 불가능하거나 잘못된 저장값 복구',()=>{
   const a=boot();
-  a.click('root','2'); a.click('q','7'); a.click('rs','5'); a.click('t','0'); a.click('label','degree'); a.click('acc','flat'); a.click('lay','skip');
+  a.click('root','2'); a.click('q','7'); a.click('rs','5'); a.click('t','0'); a.click('label','degree'); a.click('acc','flat');
   const saved=a.state();
   assert.deepEqual(saved.t,[false,true,true,true]);
-  assert.equal(saved.layout,'skip');
   cleanup();
   const b=boot(JSON.stringify(saved));
   assert.deepEqual(b.state(),saved);
@@ -146,10 +148,10 @@ test('구성음 프리셋: 적용·눌림 표시, 트라이어드에서는 3·7�
 
 test('상세 조건 요약 줄과 카드 제목',()=>{
   const t=boot();
-  assert.match(t.container.querySelector('.adv summary span').textContent,/구성음 1·♭3·5·♭7 · 붙여서 · 베이스 4번 줄/);
-  t.click('rs','all'); t.click('lay','skip');
-  assert.match(t.container.querySelector('.adv summary span').textContent,/쉘 · 베이스 전체/);
-  t.click('lay','adj'); t.click('rs','4');
+  assert.match(t.container.querySelector('.adv summary span').textContent,/구성음 1·♭3·5·♭7 · 베이스 4번 줄/);
+  t.click('rs','all');
+  assert.match(t.container.querySelector('.adv summary span').textContent,/베이스 전체/);
+  t.click('rs','4');
   assert.equal(t.container.querySelector('.card .who b').textContent,'4번 줄');
   assert.match(t.container.querySelector('.card .hint.order').textContent,/^낮은 줄부터 /);
 });

@@ -1,12 +1,11 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']];
-const LAYOUTS=[['adj','붙여서','인접한 줄'],['skip','쉘','한 줄 건너뛰기']];
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
 // 자주 쓰는 구성음 조합. 도수 이름으로 고르므로 코드 종류가 바뀌어도 같은 뜻을 유지한다. min은 필요한 최소 구성음 수.
 const PRESETS=[
@@ -42,7 +41,6 @@ export default function FretGuide(){
       case 'q': return {...s,q:v};
       case 'rs': return {...s,rs:v==='all'?'all':Number(v)};
       case 'label': return {...s,label:v};
-      case 'lay': return {...s,layout:v};
       case 'mode': return {...s,mode:v};
       case 'preset': { const p=PRESETS.find(x=>x.id===v); const qq=QUALITIES.find(x=>x.id===s.q); return p?{...s,t:presetT(p,qq)}:s; }
       case 'acc': return {...s,flat:v==='flat'};
@@ -58,21 +56,23 @@ export default function FretGuide(){
     }
   });
 
-  const {root,q:qid,rs,t,layout,label,flat,octave,mode,prog,progDone,progN}=state;
+  const {root,q:qid,rs,t,label,flat,octave,mode,prog,progDone,progN}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
   const isProg=mode==='prog';
 
-  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,layout),[isProg,root,qid,rs,octave,t,layout]);
+  const list=useMemo(()=>isProg?[]:collect(root,qid,rs,octave,t,'any'),[isProg,root,qid,rs,octave,t]);
   // 진행을 다 고른 뒤: 가능한 보이싱 가짓수와, 손 이동이 적은 순으로 꺼내는 목록
   const showResult=isProg&&progDone&&prog.length>0;
   const rank=useMemo(()=>{
     if(!showResult) return null;
-    const c=progressionCandidates(prog,rs,progN,layout);
-    return {n:countVoicings(c),list:rankVoicings(c)};
-  },[showResult,prog,rs,progN,layout]);
+    // 줄 배치는 진행에 맞게 자동으로 정한다 (붙여서 우선, 쉘을 섞어야 이동이 줄 때만 쉘 포함)
+    const lay=autoLayout(prog,rs,progN);
+    const c=progressionCandidates(prog,rs,progN,lay);
+    return {n:countVoicings(c),list:rankVoicings(c),lay};
+  },[showResult,prog,rs,progN]);
   useEffect(()=>{ setVi(0); },[rank]);
   const cur=rank&&rank.n?rank.list.get(Math.min(vi,rank.n-1)):null;
   const fmt=n=>n.toLocaleString('ko-KR');
@@ -80,24 +80,23 @@ export default function FretGuide(){
 
   // 지금 고른 다른 값과 합쳤을 때 폼이 하나도 없는 선택지는 비활성화한다 (고른 버튼은 그대로 둔다)
   // 진행 보기에서는 구성음 대신 음 개수(progN)로 판단한다
-  const has=(id,r,lay)=>isProg?hasFormsN(id,r,progN,lay):hasForms(id,r,t,lay);
-  const qOff=id=>id!==qid&&!has(id,rs,layout);
-  const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v),layout);
-  const layOff=v=>v!==layout&&!has(qid,rs,v);
-  const pnOff=n=>n!==progN&&!hasFormsN(qid,rs,n,layout);
+  const has=(id,r)=>isProg?hasFormsN(id,r,progN,'any'):hasForms(id,r,t,'any');
+  const qOff=id=>id!==qid&&!has(id,rs);
+  const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v));
+  const pnOff=n=>n!==progN&&!hasFormsN(qid,rs,n,'any');
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
-  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasForms(qid,rs,next,layout); };
+  const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasForms(qid,rs,next,'any'); };
 
   const presetOff=p=>{
     const pt=presetT(p,q);
     if(pt.filter(Boolean).length<(p.min||1)) return true;
     const same=JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,pt));
-    return !same&&!hasForms(qid,rs,pt,layout);
+    return !same&&!hasForms(qid,rs,pt,'any');
   };
   const presetOn=p=>JSON.stringify(maskFor(qid,t))===JSON.stringify(maskFor(qid,presetT(p,q)));
   // 접어 둔 상세 조건에 현재 값을 한 줄로 보여 준다
   const advSummary=(isProg?`${progN}음`:`구성음 ${maskFor(qid,t).map(i=>degName(q.deg[i])).join('·')}`)
-    +` · ${layout==='skip'?'쉘':'붙여서'} · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`;
+    +` · 베이스 ${rs==='all'?'전체':rs+'번 줄'}`;
 
   let cards,count,solo=false;
   if(!isProg){
@@ -105,14 +104,14 @@ export default function FretGuide(){
     cards=list.length?list.map((res,i)=>(
       <figure className="card" key={i+res.notes.map(n=>n?n.fret:'x').join(',')}>
         <figcaption>
-          <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스</span></div>
+          <div className="who"><b>{res.bass}번 줄</b><span className="deg">{res.bassLabel==='R'?'근음':res.bassLabel} 베이스{isShell(res)?' · 쉘':''}</span></div>
           <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
         </figcaption>
         <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
-        {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
+        {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}{isShell(res)?' · 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':''}</p>}
       </figure>
     )):<div className="empty"><p>이 조건으로 잡히는 폼이 없어요.</p><p>구성음이나 베이스를 바꿔 보세요.</p></div>;
-    count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`+(layout==='skip'?' · 쉘: 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':'');
+    count=`폼 ${list.length}개 · ${maskFor(qid,t).length}음`;
   }else if(!showResult){
     cards=<div className="empty">{prog.length
       ?<><p>진행을 다 골랐으면 &quot;보이싱 찾기&quot;를 누르세요.</p><p>&quot;상세 조건&quot;의 음 개수에 맞는 보이싱 가짓수와, 손 이동이 적은 순서대로 보여줘요.</p></>
@@ -133,15 +132,15 @@ export default function FretGuide(){
       return (
         <figure className="card" key={i}>
           <figcaption>
-            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{d===0?'제자리':`${d}프렛 이동`}</span></>}</span></div>
+            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{isShell(res)?' · 쉘':''}{d===null?null:<> · <span className="move">{d===0?'제자리':`${d}프렛 이동`}</span></>}</span></div>
             <div className="pos">{hp===0?'개방':hp+'프렛'}</div>
           </figcaption>
           <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
-          {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}</p>}
+          {res.count>1&&<p className="hint order">낮은 줄부터 {res.formName}{isShell(res)?' · 건너뛴 줄은 옆 손가락으로 살짝 닿아 소리를 막아 주세요':''}</p>}
         </figure>
       );
     });
-    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · ${progN}음 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(layout==='skip'?' · 쉘':'');
+    count=`${fmt(Math.min(vi,rank.n-1)+1)}번째 · ${progN}음 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`+(rank.lay==='any'?' · 쉘 폼 포함':'');
   }
 
   return (
@@ -190,12 +189,6 @@ export default function FretGuide(){
             </div>
           </div>
           )}
-          <div className="group">
-            <h2 id="h-lay">줄 배치</h2>
-            <div className="seg row2" role="group" aria-labelledby="h-lay">
-              {LAYOUTS.map(([v,l,d])=><Chip key={v} k="lay" v={v} on={layout===v} disabled={layOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
-            </div>
-          </div>
           <div className="group">
             <h2 id="h-rs">베이스</h2>
             <div className="seg row7" role="group" aria-labelledby="h-rs">
