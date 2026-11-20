@@ -2,7 +2,7 @@
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt} from '../lib/fretlogic.js';
-import {DEFAULT,MAX_PROG,FRET_MINS,loadState,saveState} from '../lib/settings.js';
+import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']];
@@ -54,7 +54,7 @@ export default function FretGuide(){
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
       case 'pedit': return {...s,progDone:false};
       case 'pn': return {...s,progN:Number(v)};
-      case 'fmin': return {...s,fmin:Number(v)};
+      case 'fstep': return {...s,fmin:Math.max(0,Math.min(FRET_MAX,s.fmin+Number(v)))};
       default: return s;
     }
   });
@@ -103,7 +103,8 @@ export default function FretGuide(){
   const qOff=id=>id!==qid&&!has(id,rs);
   const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v));
   const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
-  const fretOff=n=>n!==fmin&&!hasAt(root,qid,rs,t,n);
+  // 하한을 올릴수록 폼은 줄어들기만 하므로, 다음 숫자에 폼이 없으면 + 는 막는다
+  const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,t,fmin+1);
   // 구성음 칩: 켜면 폼이 하나도 없어지거나, 마지막 하나를 끄게 되는 칩은 비활성화한다
   const tOff=i=>{ if(i>=q.tones.length) return true; const next=t.slice(); next[i]=!next[i]; return !hasFormsAt(root,qid,rs,next,'any',fmin); };
 
@@ -233,9 +234,11 @@ export default function FretGuide(){
           </div>
           <div className="group">
             <h2 id="h-fret">프렛</h2>
-            <select className="sel" data-k="fmin" aria-labelledby="h-fret" value={String(fmin)} onChange={e=>pick('fmin',e.target.value)}>
-              {FRET_MINS.map(n=><option key={n} value={String(n)} disabled={fretOff(n)}>{n===0?'전체':`${n}프렛 이상`}</option>)}
-            </select>
+            <div className="stepper" role="group" aria-labelledby="h-fret">
+              <Chip k="fstep" v="-1" disabled={fmin<=0} onPick={pick} aria-label="프렛 낮추기">−</Chip>
+              <output className="val" aria-live="polite">{fmin===0?'전체':fmin}</output>
+              <Chip k="fstep" v="1" disabled={plusOff} onPick={pick} aria-label="프렛 올리기">+</Chip>
+            </div>
           </div>
           </div>
         </details>

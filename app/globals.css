@@ -26,7 +26,7 @@ button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:tra
 button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 h1,h2,p{margin:0}
 
-.app{max-width:1180px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:20px}
+.app{max-width:1180px;margin:0 auto;padding:20px 16px 40px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
 .top h1{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.01em;text-wrap:balance}
 .top p{color:var(--steel);font-size:14px;margin-top:4px}
 .top{display:flex;flex-direction:column;align-items:stretch;gap:10px}
@@ -164,3 +164,7 @@ h1,h2,p{margin:0}
   .cards:focus-visible{outline:2px solid var(--brass);outline-offset:2px;border-radius:12px}
 }
 .adv>summary b{white-space:nowrap;flex:0 0 auto}
+.stepper{display:grid;grid-template-columns:64px 1fr 64px;gap:6px;align-items:center}
+.stepper .chip{min-height:48px;font-size:22px;font-weight:500}
+.stepper .val{display:flex;align-items:center;justify-content:center;min-height:48px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.rail,.adv{min-width:0}
