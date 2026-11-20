@@ -78,8 +78,8 @@ h1,h2,p{margin:0}
 .seg.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg.row3 .chip{min-width:0;flex-direction:column}
 .seg.row2 .chip{min-width:0;flex-direction:column}
-.seg.row7{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.seg.row7 .chip{min-width:0;padding:4px 2px}
+
+
 .count{font-size:13px;color:var(--steel)}
 .empty{display:grid;gap:10px;justify-items:center;grid-column:1 / -1;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:24px 16px;color:var(--steel);font-size:14px;text-align:center}
 .who{flex-wrap:wrap}

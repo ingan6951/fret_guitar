@@ -18,7 +18,21 @@ function boot(saved){
   const flags=k=>{ const s=sel(k); return s
     ?Object.fromEntries([...s.querySelectorAll('option')].map(o=>[o.value,o.disabled]))
     :Object.fromEntries([...r.container.querySelectorAll(`button[data-k="${k}"]`)].map(b=>[b.dataset.v,b.disabled])); };
-  const click=(k,v)=>{ const b=btn(k,v); assert.ok(b,`버튼 없음 ${k}=${v}`); const s=sel(k); if(s){ if(!b.disabled) fireEvent.change(s,{target:{value:String(v)}}); } else fireEvent.click(b); };
+  const RSO=['all','1','2','3','4','5','6'];
+  // 베이스는 스테퍼라서, 원하는 값이 될 때까지 − / + 를 누른다 (폼이 없는 값은 건너뛰어 가므로 못 가면 멈춘다)
+  const setRs=v=>{
+    for(let i=0;i<10;i++){
+      const cur=String(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{"rs":4}').rs);
+      if(cur===String(v)) return;
+      const d=RSO.indexOf(String(v))>RSO.indexOf(cur)?'1':'-1';
+      const b=r.container.querySelector(`button[data-k="rstep"][data-v="${d}"]`);
+      if(!b||b.disabled) return;
+      fireEvent.click(b);
+      const nxt=String(JSON.parse(localStorage.getItem(STORAGE_KEY)).rs);
+      if(Math.sign(RSO.indexOf(nxt)-RSO.indexOf(String(v)))*Math.sign(RSO.indexOf(cur)-RSO.indexOf(String(v)))<=0) return; // 목표를 지나쳤거나 도착
+    }
+  };
+  const click=(k,v)=>{ if(k==='rs') return setRs(v); const b=btn(k,v); assert.ok(b,`버튼 없음 ${k}=${v}`); const s=sel(k); if(s){ if(!b.disabled) fireEvent.change(s,{target:{value:String(v)}}); } else fireEvent.click(b); };
   const svgs=()=>r.container.querySelectorAll('.cards svg').length;
   const state=()=>JSON.parse(localStorage.getItem(STORAGE_KEY));
   const count=()=>r.container.querySelector('.count').textContent;
@@ -35,11 +49,15 @@ test('처음 화면: Am7, 4번 줄 베이스 폼 4개',()=>{
 test('m7 4음: 베이스 1~3은 비활성, 근음은 항상 활성, 비활성 버튼은 눌러도 무시',()=>{
   const t=boot();
   t.click('rs','all');
-  assert.deepEqual(t.flags('rs'),{1:true,2:true,3:true,4:false,5:false,6:false,all:false});
   assert.ok(Object.values(t.flags('root')).every(x=>!x));
-  const before=t.container.querySelector('.cards').innerHTML;
-  fireEvent.click(t.btn('rs','1'));
-  assert.equal(t.container.querySelector('.cards').innerHTML,before);
+  // 전체에서 − 는 막히고, + 는 폼이 없는 1~3번 줄을 건너뛰어 4번 줄로 간다
+  const dn=t.container.querySelector('button[data-k="rstep"][data-v="-1"]');
+  assert.equal(dn.disabled,true);
+  fireEvent.click(dn);
+  assert.equal(t.state().rs,'all');
+  fireEvent.click(t.container.querySelector('button[data-k="rstep"][data-v="1"]'));
+  assert.equal(t.state().rs,4);
+  fireEvent.click(t.container.querySelector('button[data-k="rstep"][data-v="-1"]'));
   assert.equal(t.state().rs,'all');
 });
 
@@ -320,9 +338,10 @@ test('진행: 음 개수 − + (1~6), 6음이면 베이스는 6번 줄만',()=>{
   assert.equal(val(),'6');
   assert.equal(t.btn('pnstep','1').disabled,true,'6에서 + 막힘');
   // 6음이면 6번 줄 베이스만 고를 수 있다
-  const f=t.flags('rs');
-  assert.equal(f['6'],false);
-  for(const k of ['5','4','3','2','1']) assert.equal(f[k],true,`베이스 ${k}번 줄은 6음에서 비활성`);
+  assert.equal(t.container.querySelector('button[data-k="rstep"][data-v="-1"]').disabled,true);
+  fireEvent.click(t.container.querySelector('button[data-k="rstep"][data-v="1"]'));
+  assert.equal(t.state().rs,6,'6음이면 베이스는 6번 줄뿐');
+  assert.equal(t.container.querySelector('button[data-k="rstep"][data-v="1"]').disabled,true);
   for(let i=0;i<5;i++) t.click('pnstep','-1');
   assert.equal(val(),'1');
   assert.equal(t.btn('pnstep','-1').disabled,true,'1에서 − 막힘');

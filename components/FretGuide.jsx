@@ -5,7 +5,7 @@ import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progress
 import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
-const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']];
+const RS_ORDER=['all',1,2,3,4,5,6]; // 베이스 스테퍼 순서: 전체 → 1번 줄 … 6번 줄
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
 // 자주 쓰는 구성음 조합. 도수 이름으로 고르므로 코드 종류가 바뀌어도 같은 뜻을 유지한다. min은 필요한 최소 구성음 수.
 const PRESETS=[
@@ -104,7 +104,8 @@ export default function FretGuide(){
   const has=(id,r)=>hasAt(root,id,r,t,fmin);
   const rootOff=i=>i!==root&&!hasAt(i,qid,rs,t,fmin);
   const qOff=id=>id!==qid&&!has(id,rs);
-  const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v));
+  // 베이스 스테퍼: 폼이 없는 값은 건너뛰고 가장 가까운 값으로 간다. 갈 곳이 없으면 null
+  const rsNext=d=>{ for(let i=RS_ORDER.indexOf(rs)+d;i>=0&&i<RS_ORDER.length;i+=d) if(has(qid,RS_ORDER[i])) return RS_ORDER[i]; return null; };
   // 맨 위 음: 지금 근음·코드·베이스·음 개수·프렛으로 그 음이 맨 위인 폼이 있어야 고를 수 있다
   const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,'any',fmin,i);
   const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
@@ -237,8 +238,10 @@ export default function FretGuide(){
           )}
           <div className="group">
             <h2 id="h-rs">베이스</h2>
-            <div className="seg row7" role="group" aria-labelledby="h-rs">
-              {RS.map(([v,l])=><Chip key={v} k="rs" v={v} on={String(rs)===v} disabled={rsOff(v)} onPick={pick}>{l}</Chip>)}
+            <div className="stepper" role="group" aria-labelledby="h-rs">
+              <Chip k="rstep" v="-1" disabled={rsNext(-1)===null} onPick={(k,v)=>{ const n=rsNext(Number(v)); if(n!==null) pick('rs',String(n)); }} aria-label="베이스 줄 낮추기">−</Chip>
+              <output className="val" aria-live="polite">{rs==='all'?'전체':`${rs}번 줄`}</output>
+              <Chip k="rstep" v="1" disabled={rsNext(1)===null} onPick={(k,v)=>{ const n=rsNext(Number(v)); if(n!==null) pick('rs',String(n)); }} aria-label="베이스 줄 올리기">+</Chip>
             </div>
           </div>
           <div className="group">
