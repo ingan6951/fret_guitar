@@ -52,7 +52,7 @@ test('조건은 근음·코드·음 개수뿐이고 묶음·진행 추가 버튼
 
 test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 맨 앞 8개)',()=>{
   const expected={Em:'0 2 2 0 0 0',Am:'x 0 2 2 1 0',C:'x 3 2 0 1 0',D:'x x 0 2 3 2',G:'3 2 0 0 0 3',E:'0 2 2 1 0 0',A:'x 0 2 2 2 0',Dm:'x x 0 2 3 1'};
-  assert.equal(CHORDS.length,52);
+  assert.equal(CHORDS.length,179);
   for(const c of CHORDS.slice(0,8)){
     const t=boot({root:c.root,q:c.q});
     assert.equal(t.container.querySelector('.sym').textContent,nameOf(c));
@@ -66,7 +66,7 @@ test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 �
 test('근음 12개·코드 2종류를 모두 고를 수 있고, 근음을 바꿔도 코드 종류가 유지된다',()=>{
   const t=boot();
   assert.ok(Object.values(t.flags('root')).every(off=>!off),'12개 근음 모두 선택 가능');
-  assert.ok(Object.values(t.flags('q')).every(off=>!off),'Major·minor 모두 선택 가능');
+  assert.equal(t.flags('q').maj,false); assert.equal(t.flags('q').min,false);
   t.click('root','0');
   assert.deepEqual([t.state().root,t.state().q],[0,'min']);
   assert.equal(t.container.querySelector('.sym').textContent,'Cm');
