@@ -1,7 +1,7 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,maskFor,hasForms,collect,handPos,progressionCandidates,countVoicings,rankVoicings,hasFormsN,isShell,autoLayout,hasFormsAt,hasFormsNAt,hasTopAt} from '../lib/fretlogic.js';
 import {DEFAULT,MAX_PROG,FRET_MAX,loadState,saveState} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
@@ -36,6 +36,7 @@ export default function FretGuide(){
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
   useEffect(()=>{ if(typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(min-width:920px)').matches) setAdvOpen(true); },[]);
 
+  const withTop=s=>{ const n=QUALITIES.find(x=>x.id===s.q).tones.length; return Number.isInteger(s.top)&&s.top<n?{root:s.root,q:s.q,top:s.top}:{root:s.root,q:s.q}; };
   const pick=(k,v)=>setState(s=>{
     switch(k){
       case 'root': return {...s,root:Number(v)};
@@ -47,8 +48,9 @@ export default function FretGuide(){
       case 'acc': return {...s,flat:v==='flat'};
       case 'oct': return {...s,octave:!s.octave};
       case 't': { const t=s.t.slice(); t[Number(v)]=!t[Number(v)]; return {...s,t}; }
-      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,{root:s.root,q:s.q}],progDone:false}:s;
-      case 'pupd': { const i=Number(v); return s.prog[i]?{...s,prog:s.prog.map((c,j)=>j===i?{root:s.root,q:s.q}:c),progDone:false}:s; }
+      case 'top': return {...s,top:v===''?null:Number(v)};
+      case 'padd': return s.prog.length<MAX_PROG?{...s,prog:[...s.prog,withTop(s)],progDone:false}:s;
+      case 'pupd': { const i=Number(v); return s.prog[i]?{...s,prog:s.prog.map((c,j)=>j===i?withTop(s):c),progDone:false}:s; }
       case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v)),progDone:false};
       case 'pclear': return {...s,prog:[],progDone:false};
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
@@ -59,7 +61,7 @@ export default function FretGuide(){
     }
   });
 
-  const {root,q:qid,rs,t,fmin,label,flat,octave,mode,prog,progDone,progN}=state;
+  const {root,q:qid,rs,t,fmin,label,flat,octave,mode,prog,progDone,progN,top}=state;
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
@@ -75,7 +77,7 @@ export default function FretGuide(){
   const choose=i=>{
     if(selOk===i&&!showResult){ setSel(null); return; }
     setSel(i);
-    setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q,progDone:false}:s);
+    setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q,top:Number.isInteger(s.prog[i].top)?s.prog[i].top:null,progDone:false}:s);
   };
   const pickSel=(k,v)=>{ pick(k,v); setSel(null); };
   const rank=useMemo(()=>{
@@ -102,6 +104,10 @@ export default function FretGuide(){
   const rootOff=i=>i!==root&&!hasAt(i,qid,rs,t,fmin);
   const qOff=id=>id!==qid&&!has(id,rs);
   const rsOff=v=>v!==String(rs)&&!has(qid,v==='all'?'all':Number(v));
+  // 맨 위 음: 지금 근음·코드·베이스·음 개수·프렛으로 그 음이 맨 위인 폼이 있어야 고를 수 있다
+  const topOff=i=>i!==top&&!hasTopAt(root,qid,rs,progN,'any',fmin,i);
+  const topEff=Number.isInteger(top)&&top<q.tones.length&&!topOff(top)?top:null;
+  const topTag=c=>Number.isInteger(c.top)?degName(QUALITIES.find(x=>x.id===c.q).deg[c.top]):'';
   const pnOff=n=>n!==progN&&!hasFormsNAt(root,qid,rs,n,'any',fmin);
   // 하한을 올릴수록 폼은 줄어들기만 하므로, 다음 숫자에 폼이 없으면 + 는 막는다
   const plusOff=fmin>=FRET_MAX||!hasAt(root,qid,rs,t,fmin+1);
@@ -275,7 +281,7 @@ export default function FretGuide(){
                 <span key={i} style={{display:'contents'}}>
                   {i>0&&<span className="arrow" aria-hidden="true">→</span>}
                   <button className="chip" type="button" data-k="psel" data-v={String(i)} aria-pressed={String(selOk===i)}
-                    aria-label={`${i+1}번째 ${chordName(c)} 선택`} onClick={()=>choose(i)}>{chordName(c)}</button>
+                    aria-label={`${i+1}번째 ${chordName(c)} 선택${Number.isInteger(c.top)?`, 맨 위 음 ${topTag(c)}도`:''}`} onClick={()=>choose(i)}>{chordName(c)}{Number.isInteger(c.top)&&<small className="toptag">↑{topTag(c)}</small>}</button>
                 </span>
               ))}
             </div>
@@ -283,10 +289,16 @@ export default function FretGuide(){
               {selOk!==null&&(
                 <div className="prog-actions sel-actions">
                   <span className="selname">{selOk+1}번째 {chordName(prog[selOk])}</span>
-                  <Chip k="pupd" v={String(selOk)} disabled={prog[selOk].root===root&&prog[selOk].q===qid} onPick={pickSel}>수정 → {sym}</Chip>
+                  <Chip k="pupd" v={String(selOk)} disabled={prog[selOk].root===root&&prog[selOk].q===qid&&(Number.isInteger(prog[selOk].top)?prog[selOk].top:null)===topEff} onPick={pickSel}>수정 → {sym}</Chip>
                   <Chip k="pdel" v={String(selOk)} onPick={pickSel}>제거</Chip>
                 </div>
               )}
+              <label className="pair toprow"><span>맨 위 음</span>
+                <select className="sel" data-k="top" aria-label="맨 위 음" value={topEff===null?'':String(topEff)} onChange={e=>pick('top',e.target.value)}>
+                  <option value="">자동</option>
+                  {q.tones.map((iv,i)=>(<option key={i} value={String(i)} disabled={topOff(i)}>{degName(q.deg[i])} ({nm[(root+iv)%12]})</option>))}
+                </select>
+              </label>
               <div className="prog-actions">
                 <Chip k="padd" v="" className="chip add" disabled={prog.length>=MAX_PROG} onPick={pick}>+ {sym} 추가</Chip>
                 <Chip k="pclear" v="" disabled={!prog.length} onPick={pick}>비우기</Chip>

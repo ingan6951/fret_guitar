@@ -277,6 +277,37 @@ test('진행: 코드를 골라 수정·제거 (C–Am–Dm–G–C)',()=>{
   assert.ok(t.btn('pdel','0'));
 });
 
+test('진행: 코드별 맨 위 음 지정 (D–A–Bm7)',()=>{
+  const t=boot();
+  t.click('mode','prog');
+  t.click('rs','all');
+  // 기본은 자동
+  assert.equal(t.state().top,null);
+  // D 메이저: 맨 위 음을 3도(인덱스 1)로 지정해 추가
+  t.click('root','2'); t.click('q','maj');
+  t.click('top','1');
+  assert.equal(t.state().top,1);
+  t.click('padd','');
+  assert.equal(t.state().prog[0].top,1);
+  assert.match(t.btn('psel','0').textContent,/↑3/);
+  // 자동으로 추가하면 top 없음
+  t.click('top','');
+  t.click('root','9'); t.click('padd','');
+  assert.equal(t.state().prog[1].top,undefined);
+  // 칩을 고르면 그 코드의 맨 위 음이 선택에 불러와진다
+  t.click('psel','0');
+  assert.equal(t.state().top,1);
+  // 수정: 맨 위 음을 5도(2)로 바꾸면 수정 버튼이 켜진다
+  assert.equal(t.btn('pupd','0').disabled,true);
+  t.click('top','2');
+  assert.equal(t.btn('pupd','0').disabled,false);
+  t.click('pupd','0');
+  assert.equal(t.state().prog[0].top,2);
+  // 결과 화면의 보이싱은 모두 지정한 음이 맨 위
+  t.click('pfind','');
+  assert.ok(t.svgs()>0);
+});
+
 test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 바뀌면 첫 장으로, 폼이 하나면 없다',()=>{
   const t=boot();
   const pos=()=>t.container.querySelector('.cpos').textContent;

@@ -368,6 +368,41 @@ let progChecks=0;
   console.log(`줄 배치 자동 선택 120개 검사 (쉘 포함 ${anyCount}개)`);
 }
 
+// 코드별 맨 위 음 지정
+{
+  const {topIndex,topOf,hasTopAt,progressionCandidates,candidatesN,countVoicings}=L;
+  let seed=4242,checked=0;
+  const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
+  for(let trial=0;trial<150;trial++){
+    const q=QUALITIES[rnd(QUALITIES.length)];
+    const root=rnd(12),rs=[6,5,4,3,'all'][rnd(5)],n=[2,3,4][rnd(3)],fm=[0,0,3,5][rnd(4)];
+    const all=candidatesN(root,q.id,rs,n,'any',fm);
+    for(let tp=0;tp<q.tones.length;tp++){
+      const c={root,q:q.id,top:tp};
+      // 직접 계산: 가장 높은 줄의 음 높이가 tp번째 구성음인 폼
+      const want=all.filter(r=>{
+        const hi=r.notes.filter(Boolean).sort((a,b)=>a.string-b.string)[0];
+        return ((hi.pc-root+12)%12)===q.tones[tp];
+      });
+      const got=progressionCandidates([c],rs,n,'any',fm)[0];
+      const ok=want.length?got.length===want.length&&got.every(r=>topIndex(r,c)===tp):got.length===1&&got[0]===null;
+      if(!ok) fails.push(`top 필터 ${q.id} ${root} rs${rs} n${n} fm${fm} top${tp}`);
+      if(hasTopAt(root,q.id,rs,n,'any',fm,tp)!==(want.length>0)) fails.push(`hasTopAt ${q.id} ${root} top${tp}`);
+      checked++;
+    }
+  }
+  // 범위를 벗어난 top은 무시한다
+  if(topOf({root:0,q:'maj',top:3})!==null) fails.push('범위 밖 top');
+  const base=progressionCandidates([{root:0,q:'maj'}],4,3,'any')[0].length;
+  if(progressionCandidates([{root:0,q:'maj',top:9}],4,3,'any')[0].length!==base) fails.push('범위 밖 top이 후보를 줄임');
+  // top을 지정하면 가짓수는 줄어들기만 한다
+  const prog=[{root:2,q:'maj'},{root:9,q:'maj'},{root:11,q:'m7'},{root:2,q:'maj'}];
+  const free=countVoicings(progressionCandidates(prog,'all',2,'any'));
+  const fixed=countVoicings(progressionCandidates(prog.map(c=>({...c,top:1})),'all',2,'any'));
+  if(!(fixed<=free)) fails.push('top 지정이 가짓수를 늘림');
+  console.log(`맨 위 음 ${checked}개 검사 (가짓수 ${free} → ${fixed})`);
+}
+
 console.log(`진행 ${progChecks}개 검사`);
 console.log(`조합 ${combos}개 (폼 없는 조합 ${impossible}개) 검사`);
 if(fails.length){ console.log(`실패 ${fails.length}건`); fails.slice(0,20).forEach(f=>console.log(' -',f)); process.exit(1); }

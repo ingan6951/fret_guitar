@@ -185,3 +185,6 @@ h1,h2,p{margin:0}
   .adv:not([open])>summary{padding:6px 12px}
   .advline{display:block}
 }
+
+.toptag{margin-left:4px;font-size:.7em;opacity:.75}
+.toprow{margin:6px 0}
