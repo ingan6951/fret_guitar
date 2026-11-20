@@ -8,7 +8,6 @@ import Diagram,{ariaFor} from './Diagram.jsx';
 const RS=[['1','1'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['all','전체']];
 const LAYOUTS=[['adj','붙여서','인접한 줄'],['skip','쉘','한 줄 건너뛰기']];
 const LABELS=[['finger','손가락'],['note','음이름'],['degree','도수']];
-const MODES=[['chord','코드'],['prog','진행']];
 // 자주 쓰는 구성음 조합. 도수 이름으로 고르므로 코드 종류가 바뀌어도 같은 뜻을 유지한다. min은 필요한 최소 구성음 수.
 const PRESETS=[
   {id:'all',label:'전부',pick:()=>true},
@@ -149,12 +148,6 @@ export default function FretGuide(){
     <div className="app">
       <header className="top">
         <h1>기타 가이드</h1>
-        <div className="tabs" role="tablist" aria-label="보기">
-          {MODES.map(([v,l])=>(
-            <button key={v} className="tab" type="button" role="tab" data-k="mode" data-v={v} aria-selected={mode===v}
-              onClick={()=>pick('mode',v)}>{l}</button>
-          ))}
-        </div>
       </header>
 
       <section className="rail" aria-label="코드 선택">
@@ -211,6 +204,7 @@ export default function FretGuide(){
           </div>
           </div>
         </details>
+        <Chip k="mode" v={isProg?'chord':'prog'} className="chip modebtn" onPick={pick}>{isProg?'← 코드 하나만 보기':'+ 진행 만들기'}</Chip>
       </section>
 
       <main className="stage">
