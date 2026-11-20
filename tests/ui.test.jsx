@@ -27,11 +27,11 @@ const chipNames=t=>[...t.container.querySelectorAll('button[data-k="psel"]')].ma
 const addFirst=t=>fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
 const nameOf=c=>NOTE_SHARP[c.root]+QUALITIES.find(q=>q.id===c.q).suffix;
 
-test('처음 화면: Am 폼 하나, 개방 위치, 5번 줄 베이스',()=>{
+test('처음 화면: Am 폼 2개(오픈, 5프렛 바레), 첫 폼은 개방 위치·5번 줄 베이스',()=>{
   const t=boot();
   assert.equal(t.container.querySelector('.sym').textContent,'Am');
-  assert.equal(t.svgs(),1);
-  assert.match(t.count(),/폼 1개/);
+  assert.equal(t.svgs(),2);
+  assert.match(t.count(),/폼 2개/);
   assert.equal(t.container.querySelector('.card .who b').textContent,'5번 줄');
   assert.equal(t.container.querySelector('.card .pos').textContent,'개방');
   // 소리 나는 5줄: 개방 2줄(5·1번) + 누르는 3줄, 6번 줄은 뮤트
@@ -50,49 +50,44 @@ test('조건은 근음·코드·음 개수뿐이고 묶음·진행 추가 버튼
   assert.ok(t.container.querySelector('.card .capr button[data-k="fadd"]'),'우측 상단 + 버튼');
 });
 
-test('데이터에 적힌 8개 코드가 모두 이미지와 같은 운지로 나온다',()=>{
+test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 맨 앞 8개)',()=>{
   const expected={Em:'0 2 2 0 0 0',Am:'x 0 2 2 1 0',C:'x 3 2 0 1 0',D:'x x 0 2 3 2',G:'3 2 0 0 0 3',E:'0 2 2 1 0 0',A:'x 0 2 2 2 0',Dm:'x x 0 2 3 1'};
-  assert.equal(CHORDS.length,8);
-  for(const c of CHORDS){
+  assert.equal(CHORDS.length,52);
+  for(const c of CHORDS.slice(0,8)){
     const t=boot({root:c.root,q:c.q});
     assert.equal(t.container.querySelector('.sym').textContent,nameOf(c));
-    assert.equal(t.svgs(),1,`${nameOf(c)} 폼 하나`);
+    assert.ok(t.svgs()>=1,`${nameOf(c)} 폼`);
     addFirst(t);
     assert.equal(t.state().prog[0].frets.map(f=>f===null?'x':f).join(' '),expected[nameOf(c)],`${nameOf(c)} 운지`);
     cleanup(); localStorage.clear();
   }
 });
 
-test('근음·코드는 데이터에 있는 것만 고를 수 있고, 근음을 바꾸면 있는 코드 종류로 바뀐다',()=>{
+test('근음 12개·코드 2종류를 모두 고를 수 있고, 근음을 바꿔도 코드 종류가 유지된다',()=>{
   const t=boot();
-  const roots=Object.entries(t.flags('root')).filter(([,off])=>!off).map(([v])=>Number(v)).sort((a,b)=>a-b);
-  assert.deepEqual(roots,[0,2,4,7,9],'C D E G A');
-  assert.equal(t.flags('q').maj,false); assert.equal(t.flags('q').min,false); // A는 Major·minor 모두 있다
-  t.click('root','0'); // C는 Major만 있다
-  assert.deepEqual([t.state().root,t.state().q],[0,'maj']);
-  assert.equal(t.flags('q').min,true,'C minor는 데이터가 없어 비활성');
+  assert.ok(Object.values(t.flags('root')).every(off=>!off),'12개 근음 모두 선택 가능');
+  assert.ok(Object.values(t.flags('q')).every(off=>!off),'Major·minor 모두 선택 가능');
+  t.click('root','0');
+  assert.deepEqual([t.state().root,t.state().q],[0,'min']);
+  assert.equal(t.container.querySelector('.sym').textContent,'Cm');
+  assert.equal(t.svgs(),2,'Cm은 E·A 모양 2개');
+  t.click('q','maj');
   assert.equal(t.container.querySelector('.sym').textContent,'C');
-  t.click('q','min'); // 비활성이라 무시
-  assert.equal(t.state().q,'maj');
-  t.click('root','7'); // G
-  assert.deepEqual([t.state().root,t.state().q],[7,'maj']);
-  t.click('root','2'); t.click('q','min');
-  assert.equal(t.container.querySelector('.sym').textContent,'Dm');
+  assert.equal(t.svgs(),3,'C: 오픈 + E·A 모양');
 });
 
-test('음 개수: D를 2개로 고르면 이웃한 두 줄 폼 3가지',()=>{
+test('음 개수: D를 2개로 고르면 오픈 폼에서 이웃한 두 줄 폼 3가지가 먼저 나온다',()=>{
   const t=boot({root:2,q:'maj'});
-  assert.equal(t.svgs(),1);
+  assert.equal(t.svgs(),3,'오픈, E 모양, A 모양');
   t.click('n','2');
-  assert.equal(t.svgs(),3);
-  assert.match(t.count(),/폼 3개/);
+  assert.equal(t.svgs(),3+5+4,'오픈 3가지 + E 모양 5가지 + A 모양 4가지');
   t.click('n','0');
-  assert.equal(t.svgs(),1);
+  assert.equal(t.svgs(),3);
 });
 
 test('표시 방식: 음이름·도수',()=>{
   const t=boot();
-  const labels=()=>[...t.container.querySelectorAll('.cards svg .dl,.cards svg .ol')].map(x=>x.textContent);
+  const labels=()=>[...t.container.querySelector('.cards svg').querySelectorAll('.dl,.ol')].map(x=>x.textContent);
   assert.deepEqual(labels().sort(),['A','A','C','E','E'].sort());
   t.click('label','degree');
   assert.deepEqual(labels().sort(),['1','R','R','5','♭3'].map(x=>x==='1'?'5':x).sort());
@@ -102,12 +97,12 @@ test('설정 저장·복원, 데이터에 없거나 잘못된 저장값은 기�
   const a=boot();
   a.click('root','7'); a.click('label','degree');
   const saved=a.state();
-  assert.deepEqual([saved.root,saved.q,saved.label],[7,'maj','degree']);
+  assert.deepEqual([saved.root,saved.q,saved.label],[7,'min','degree']);
   cleanup();
   const b=boot(JSON.stringify(saved));
   assert.deepEqual(b.state(),saved);
   cleanup(); localStorage.clear();
-  const c=boot({root:0,q:'min'});
+  const c=boot({root:0,q:'zzz'});
   assert.equal(c.container.querySelector('.sym').textContent,'Am');
   cleanup(); localStorage.clear();
   const d=boot('{broken');
@@ -123,7 +118,7 @@ test('진행: 폼의 + 로 시작해 다음 코드 폼을 이어 담는다 (최�
   // 다음 코드를 고르는 동안 이전 폼을 보여 준다
   assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼']);
   assert.match(t.container.querySelector('.refs .card.ref').textContent,/1\. Am/);
-  t.click('root','0'); addFirst(t);
+  t.click('root','0'); t.click('q','maj'); addFirst(t);
   t.click('root','7'); addFirst(t);
   assert.deepEqual(chipNames(t),['Am','C','G']);
   // 최대 8개
@@ -179,7 +174,7 @@ test('진행: 칩을 골라 그 자리를 다시 고르거나 제거한다 (C–
   assert.equal(t.container.querySelector('.prog'),null);
 });
 
-test('아무렇게나 눌러도 폼이 항상 하나 보인다',()=>{
+test('아무렇게나 눌러도 폼이 항상 보인다',()=>{
   const t=boot();
   let seed=12345;
   const rnd=m=>{ seed=(seed*1103515245+12345)&0x7fffffff; return seed%m; };
@@ -193,6 +188,6 @@ test('아무렇게나 눌러도 폼이 항상 하나 보인다',()=>{
       const list=[...t.container.querySelectorAll(`button[data-k="${k}"]`)];
       fireEvent.click(list[rnd(list.length)]);
     }
-    assert.equal(t.svgs(),1,`${i}번째 클릭 후 폼 수`);
+    assert.ok(t.svgs()>=1,`${i}번째 클릭 후 폼 수`);
   }
 });

@@ -14,13 +14,25 @@ const expected={
 };
 const nameOf=c=>NOTE_SHARP[c.root]+QUALITIES.find(q=>q.id===c.q).suffix;
 const toText=f=>f.map(x=>x===null?'x':x).join(' ');
-eq(CHORDS.length,Object.keys(expected).length,'코드 개수');
-CHORDS.forEach(c=>{
-  const n=nameOf(c);
-  if(!(n in expected)){ fails.push(`이미지에 없는 코드 ${n}`); return; }
-  eq(toText(c.frets),expected[n],`${n} 운지`);
-});
-Object.keys(expected).forEach(n=>{ if(!CHORDS.some(c=>nameOf(c)===n)) fails.push(`${n} 데이터 없음`); });
+const OPENS=CHORDS.slice(0,8); // 맨 앞 8개가 이미지의 오픈 코드
+eq(OPENS.map(nameOf).sort(),Object.keys(expected).sort(),'오픈 코드 목록');
+OPENS.forEach(c=>eq(toText(c.frets),expected[nameOf(c)],`${nameOf(c)} 운지`));
+
+// 프렛을 올린 폼: 오픈 E·Em·A·Am 모양을 그대로 옮긴 것 (개방현인 12가지 중 오픈 코드와 겹치는 것은 제외)
+const moved=[];
+for(const [q,shape,low] of [['maj','E',0],['min','E',0],['maj','A',1],['min','A',1]]){
+  for(let r=0;r<12;r++){
+    const f=(r-(low?9:4)+12)%12; if(!f) continue;
+    const fr=low
+      ?[null,f,f+2,f+2,q==='maj'?f+2:f+1,f]
+      :[f,f+2,f+2,q==='maj'?f+1:f,f,f];
+    moved.push({root:r,q,frets:fr});
+  }
+}
+eq(CHORDS.slice(8).map(c=>JSON.stringify(c)).sort(),moved.map(c=>JSON.stringify(c)).sort(),'프렛을 올린 폼 44개');
+eq(CHORDS.length,52,'코드 폼 개수');
+// 12개 근음 모두 Major·minor가 있다
+for(let r=0;r<12;r++) for(const q of ['maj','min']) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
 
 // 2) 음악적으로 맞는지: 소리 나는 음이 모두 코드 구성음이고 근음·3도·5도가 다 들어 있다
 CHORDS.forEach(c=>{
@@ -33,7 +45,7 @@ CHORDS.forEach(c=>{
   // 가장 낮은 소리가 나는 줄 뒤로는 끊김 없이 이어진다(뮤트는 베이스 아래쪽 줄만)
   const first=c.frets.findIndex(f=>f!==null);
   if(c.frets.slice(first).some(f=>f===null)) fails.push(`${n}: 중간에 뮤트`);
-  if(Math.max(...c.frets.filter(f=>f!==null))>4) fails.push(`${n}: 오픈 코드가 아님`);
+  if(CHORDS.indexOf(c)<8&&Math.max(...c.frets.filter(f=>f!==null))>4) fails.push(`${n}: 오픈 코드가 아님`);
 });
 
 // 3) 화면용 변환
@@ -50,15 +62,15 @@ CHORDS.forEach(c=>{
   const bar=voicingFromFrets(9,'min',[5,7,7,5,5,5]);
   eq(bar.baseFret,5,'바레 위치'); eq(handPos(bar),5,'손 위치');
   // 저장한 운지에서 그대로 되살아난다
-  CHORDS.forEach(c=>{ const r=formsFor(c.root,c.q)[0]; eq(fretsOf(r),c.frets,`${nameOf(c)} 운지 왕복`); eq(r,voicingFromFrets(c.root,c.q,fretsOf(r)),`${nameOf(c)} 복원`); });
-  eq(L.formsFor(0,'min'),[],'데이터에 없는 코드는 폼이 없다'); eq(hasChord(0,'min'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
+  CHORDS.forEach(c=>{ const r=formsFor(c.root,c.q).find(x=>JSON.stringify(fretsOf(x))===JSON.stringify(c.frets)); if(!r){ fails.push(`${nameOf(c)} 폼 목록에 없음`); return; } eq(fretsOf(r),c.frets,`${nameOf(c)} 운지 왕복`); eq(r,voicingFromFrets(c.root,c.q,fretsOf(r)),`${nameOf(c)} 복원`); });
+  eq(L.formsFor(0,'min').length,2,'Cm은 폼 2개(E·A 모양)'); eq(L.formsFor(0,'zzz'),[],'없는 종류는 폼이 없다'); eq(hasChord(0,'zzz'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
   // 창 시작: 5프렛 안이면 1, 넘으면 가장 낮은 프렛
   eq(windowStart(am.notes),1,'Am 창'); eq(windowStart(bar.notes),5,'바레 창');
 }
 
 // 4) 이동 비용: 손 위치 차이가 기본이고 자기 자신과는 0
 {
-  const f=c=>formsFor(c.root,c.q)[0];
+  const f=c=>voicingFromFrets(c.root,c.q,c.frets);
   CHORDS.forEach(c=>eq(moveCost(f(c),f(c)),0,`${nameOf(c)} 자기 이동`));
   const a=voicingFromFrets(9,'min',[null,0,2,2,1,0]),bar=voicingFromFrets(9,'min',[5,7,7,5,5,5]);
   if(!(moveCost(a,bar)>moveCost(a,a))) fails.push('이동 비용이 0 이하');
@@ -74,9 +86,9 @@ console.log('모든 검사 통과');
 {
   const asStr=f=>f.map(x=>x===null?'x':x).join('');
   const d2=L.formsFor(2,'maj',2).map(r=>asStr(L.fretsOf(r)));
-  A.deepEqual(d2,['xx02xx','xxx23x','xxxx32'],'D 2개');
-  A.equal(L.formsFor(2,'maj',0).length,1,'전체는 원래 폼 하나');
-  A.equal(L.formsFor(2,'maj',9).length,1,'줄 수가 더 많으면 전체 폼');
-  A.equal(L.formsFor(4,'min',3).length,4,'Em 6줄 중 이웃한 3줄 4가지');
+  A.deepEqual(d2.slice(0,3),['xx02xx','xxx23x','xxxx32'],'D 오픈 폼 2개');
+  A.equal(L.formsFor(2,'maj',0).length,3,'D 전체 폼 3개(오픈, E·A 모양)');
+  A.equal(L.formsFor(2,'maj',9).length,3,'줄 수가 더 많으면 전체 폼');
+  A.equal(L.formsFor(4,'min',3).length,7,'Em: 오픈 6줄 4가지 + A 모양 5줄 3가지');
   console.log('음 개수 검사 통과');
 }
