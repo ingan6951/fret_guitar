@@ -16,7 +16,7 @@ const PRESETS=[
 ];
 const presetT=(p,q)=>[0,1,2,3].map(i=>i<q.deg.length&&p.pick(q.deg[i]));
 const degName=d=>d==='R'?'1':d;
-const NOTE_COUNTS=[[2,'2음','구성음 2개'],[3,'3음','구성음 3개'],[4,'4음','모든 구성음']];
+const PN_MAX=6;
 
 function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
   return (
@@ -56,6 +56,7 @@ export default function FretGuide(){
       case 'pfind': return s.prog.length?{...s,progDone:true}:s;
       case 'pedit': return {...s,progDone:false};
       case 'pn': return {...s,progN:Number(v)};
+      case 'pnstep': return {...s,progN:Math.max(1,Math.min(PN_MAX,s.progN+Number(v)))};
       case 'fstep': return {...s,fmin:Math.max(0,Math.min(FRET_MAX,s.fmin+Number(v)))};
       default: return s;
     }
@@ -213,8 +214,10 @@ export default function FretGuide(){
         {isProg?(
           <div className="group">
             <h2 id="h-n">음 개수</h2>
-            <div className="seg row3" role="group" aria-labelledby="h-n">
-              {NOTE_COUNTS.map(([v,l,d])=><Chip key={v} k="pn" v={String(v)} on={progN===v} disabled={pnOff(v)} onPick={pick}><span>{l}</span><small>{d}</small></Chip>)}
+            <div className="stepper" role="group" aria-labelledby="h-n">
+              <Chip k="pnstep" v="-1" disabled={progN<=1||pnOff(progN-1)} onPick={pick} aria-label="음 개수 줄이기">−</Chip>
+              <output className="val" aria-live="polite">{progN}</output>
+              <Chip k="pnstep" v="1" disabled={progN>=PN_MAX||pnOff(progN+1)} onPick={pick} aria-label="음 개수 늘리기">+</Chip>
             </div>
           </div>
           ):(

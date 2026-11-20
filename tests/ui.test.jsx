@@ -195,16 +195,17 @@ test('진행: 추가·빼기·비우기·최대 8개·선택 칸·복원',()=>{
   assert.match(t.container.querySelector('.vpos').textContent,/^1 \//);
   // 진행 보기는 구성음 대신 음 개수: 구성음 칩이 없고 음 개수 칩이 있다
   assert.equal(t.container.querySelector('button[data-k="t"]'),null);
-  assert.equal(t.btn('pn','4').getAttribute('aria-pressed'),'true');
+  assert.equal(t.container.querySelector('#h-n').nextElementSibling.querySelector('output').textContent,'4');
   t.click('rs','4');
   assert.match(t.container.querySelector('.vcount').textContent,/216가지/);
   // 3음: 7th는 구성음 3개 조합(4가지)의 폼을 모두 후보로 → 가짓수가 바뀌고 카드마다 3음
-  t.click('pn','3');
+  t.click('pnstep','-1');
   assert.equal(t.state().progN,3);
   assert.doesNotMatch(t.container.querySelector('.vcount').textContent,/216가지/);
   assert.match(t.count(),/3음/);
   for(const svg of t.container.querySelectorAll('.cards svg')) assert.equal(svg.querySelectorAll('.dot,.open').length,3,'3음 폼');
-  t.click('pn','4');
+  t.click('pnstep','1');
+  assert.equal(t.state().progN,4);
   t.click('rs','all');
   // 진행 수정 → 다시 고르기 화면
   t.click('pedit','');
@@ -306,6 +307,26 @@ test('진행: 코드별 맨 위 음 지정 (D–A–Bm7)',()=>{
   // 결과 화면의 보이싱은 모두 지정한 음이 맨 위
   t.click('pfind','');
   assert.ok(t.svgs()>0);
+});
+
+test('진행: 음 개수 − + (1~6), 6음이면 베이스는 6번 줄만',()=>{
+  const t=boot();
+  t.click('mode','prog');
+  t.click('rs','all');
+  t.click('padd','');
+  const val=()=>t.container.querySelector('#h-n').nextElementSibling.querySelector('output').textContent;
+  assert.equal(val(),'4');
+  t.click('pnstep','1'); t.click('pnstep','1');
+  assert.equal(val(),'6');
+  assert.equal(t.btn('pnstep','1').disabled,true,'6에서 + 막힘');
+  // 6음이면 6번 줄 베이스만 고를 수 있다
+  const f=t.flags('rs');
+  assert.equal(f['6'],false);
+  for(const k of ['5','4','3','2','1']) assert.equal(f[k],true,`베이스 ${k}번 줄은 6음에서 비활성`);
+  for(let i=0;i<5;i++) t.click('pnstep','-1');
+  assert.equal(val(),'1');
+  assert.equal(t.btn('pnstep','-1').disabled,true,'1에서 − 막힘');
+  assert.equal(t.state().progN,1);
 });
 
 test('폼 넘기기(좁은 화면용 ◀ ▶와 번호): 넘기고, 목록이 바뀌면 첫 장으로, 폼이 하나면 없다',()=>{

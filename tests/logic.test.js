@@ -250,15 +250,15 @@ let progChecks=0;
   // 음 개수 조합
   eq(toneSubsets('m7',3).length,4,'7th 3음 조합 4가지');
   eq(toneSubsets('m7',4),[[true,true,true,true]],'7th 4음은 전부');
-  eq(toneSubsets('maj',4),[[true,true,true,false]],'트라이어드 4음은 3음 전부');
+  eq(toneSubsets('maj',4),[[true,true,true,false]],'트라이어드 4음은 구성음 전부(겹쳐서 채움)');
   eq(toneSubsets('maj',2).length,3,'트라이어드 2음 조합 3가지');
   // 음 개수 후보 = 각 조합 후보의 합집합이고, 모두 그 음 개수
   for(const qq of QUALITIES) for(const n of [2,3,4]) for(const rs of [6,4,'all']) for(const layout of ['adj','skip']){
     const got=candidatesN(4,qq.id,rs,n,layout);
     const want=new Set();
-    toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,layout).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
+    toneSubsets(qq.id,n).forEach(t=>candidates(4,qq.id,rs,t,layout,0,n>qq.tones.length?n:null).forEach(r=>want.add(r.notes.map(x=>x?x.fret:'x').join(','))));
     eq(got.length,want.size,`음 개수 후보 수 ${qq.id} ${n} ${rs} ${layout}`);
-    const k=Math.min(n,qq.tones.length);
+    const k=n;
     got.forEach(r=>{ if(r.notes.filter(Boolean).length!==k) fails.push(`음 개수 ${qq.id} ${n}: ${r.notes.filter(Boolean).length}음`); });
     eq(hasFormsN(qq.id,rs,n,layout),got.length>0,`hasFormsN ${qq.id} ${n} ${rs} ${layout}`);
   }
@@ -366,6 +366,36 @@ let progChecks=0;
     if(lay==='adj') adj.forEach(c=>c.forEach(r=>{ if(r&&isShell(r)) fails.push('adj 후보에 쉘'); }));
   }
   console.log(`줄 배치 자동 선택 120개 검사 (쉘 포함 ${anyCount}개)`);
+}
+
+// 음 개수 1~6: 구성음보다 많으면 구성음을 겹쳐서 채운다
+{
+  const {candidatesN,hasFormsN,hasFormsNAt,isShell}=L;
+  let checked=0;
+  for(const qq of QUALITIES) for(const n of [1,2,3,4,5,6]) for(const rs of [6,5,4,3,2,1,'all']){
+    const root=[0,4,9,2][(qq.tones.length+n)%4];
+    const cs=candidatesN(root,qq.id,rs,n,'any');
+    if((cs.length>0)!==hasFormsN(qq.id,rs,n,'any')) fails.push(`hasFormsN 불일치 ${qq.id} ${n} ${rs}`);
+    if((cs.length>0)!==hasFormsNAt(root,qq.id,rs,n,'any',0)) fails.push(`hasFormsNAt 불일치 ${qq.id} ${n} ${rs}`);
+    cs.forEach(r=>{
+      const sounded=r.notes.filter(Boolean);
+      if(sounded.length!==n) fails.push(`${qq.id} ${n}음인데 ${sounded.length}음`);
+      const ivs=new Set(sounded.map(x=>(x.pc-root+12)%12));
+      if(n>=qq.tones.length&&!qq.tones.every(iv=>ivs.has(iv))) fails.push(`${qq.id} ${n}음: 구성음 빠짐`);
+      if([...ivs].some(iv=>!qq.tones.includes(iv))) fails.push(`${qq.id} ${n}음: 구성음 아닌 음`);
+      if(n<=qq.tones.length&&ivs.size!==n) fails.push(`${qq.id} ${n}음: 겹음`);
+      // 손가락 4개로 잡을 수 있고(손가락 번호가 1~4), 한 프렛 폭 안
+      sounded.forEach(x=>{ if(x.fret>0&&!(x.finger>=1&&x.finger<=4)) fails.push(`${qq.id} ${n}음: 손가락 없음`); });
+      if(n===6&&r.bass!==6) fails.push('6음인데 베이스가 6번 줄이 아님');
+      if(n===6&&isShell(r)) fails.push('6음인데 쉘');
+      checked++;
+    });
+  }
+  // 6음 폼은 베이스 6번 줄만, 5음은 6·5번 줄만
+  for(const rs of [5,4,3,2,1]) if(hasFormsN('m7',rs,6,'any')) fails.push(`6음이 베이스 ${rs}번 줄에 있음`);
+  if(!hasFormsN('m7',6,6,'any')) fails.push('6음 베이스 6번 줄 폼 없음');
+  if(hasFormsN('m7',4,5,'any')) fails.push('5음이 베이스 4번 줄에 있음');
+  console.log(`음 개수 1~6 ${checked}개 폼 검사`);
 }
 
 // 코드별 맨 위 음 지정
