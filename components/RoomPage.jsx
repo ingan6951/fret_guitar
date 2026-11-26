@@ -1,58 +1,15 @@
 'use client';
 // 합주 방 페이지 (/room/?id=...): 방장은 곡을 재생·정지하고 빠르기를 바꾸며, 참여자는 소리를 켜고 같은 박을 듣는다.
-// 기기마다 이어폰 지연 보정(ms)을 맞출 수 있다.
-import {useEffect,useRef,useState} from 'react';
+// 들어오면 먼저 듣는 기기(스피커·유선 / 블루투스)를 골라 이어폰 지연을 맞춘다(기기에 저장, 다음엔 묻지 않음).
+import {useEffect,useState} from 'react';
 import Link from 'next/link';
 import {useGuide} from './GuideProvider.jsx';
-import useRoom,{MAX_LEAD} from './useRoom.js';
+import useRoom from './useRoom.js';
+import {LeadSetup,LeadSetting} from './LeadSetup.jsx';
 import TempoBar from './TempoBar.jsx';
 import {Chip} from './ui.jsx';
 import {cleanRoomId} from '../lib/sync.js';
 import {createMetronome,epochMs} from '../lib/metronome.js';
-
-const CAL_TAPS=8,CAL_BPM=100;
-
-// 이어폰 지연 보정: 슬라이더로 직접, 또는 들리는 클릭에 맞춰 눌러서 잰다
-function LeadSetting({lead,setLead}){
-  const [cal,setCal]=useState(null); // 재는 중이면 {n: 누른 횟수}
-  const R=useRef(null);
-  const end=()=>{ if(R.current) R.current.m.close(); R.current=null; setCal(null); };
-  useEffect(()=>()=>{ if(R.current) R.current.m.close(); },[]);
-  const begin=()=>{
-    const m=createMetronome(); if(!m.unlock()) return;
-    const d=60000/CAL_BPM,s=epochMs()+600;
-    m.start({startAt:s,bpm:CAL_BPM,beats:4,lead:0});
-    R.current={m,s,d,diffs:[]}; setCal({n:0});
-  };
-  // 메트로놈은 브라우저가 아는 출력 지연을 이미 빼고 예약하므로, 들린 클릭에 맞춰 누른 시각 - 예정 시각 ≈ 브라우저도 모르는 지연
-  const tap=()=>{
-    const r=R.current; if(!r) return;
-    const t=epochMs(),k=Math.round((t-r.s)/r.d);
-    if(k<1) return;
-    r.diffs.push(t-(r.s+k*r.d));
-    if(r.diffs.length<CAL_TAPS){ setCal({n:r.diffs.length}); return; }
-    const use=r.diffs.slice(2).sort((a,b)=>a-b);
-    setLead(use[Math.floor(use.length/2)]); // 처음 두 번은 익숙해지는 중이라 빼고 중앙값
-    end();
-  };
-  return (
-    <details className="panel calib">
-      <summary>이어폰 지연 보정 <b>{lead}ms</b></summary>
-      <p className="count">블루투스 이어폰은 소리가 늦게 들려요(보통 100~250ms). 이 기기에서만 클릭을 그만큼 먼저 냅니다. 유선 이어폰·스피커는 0 근처면 됩니다.</p>
-      <label className="leadrow">
-        <input type="range" min="0" max={MAX_LEAD} step="5" value={lead} data-k="lead" aria-label="이어폰 지연 보정 (ms)" onChange={e=>setLead(e.target.value)}/>
-        <span>{lead}ms</span>
-      </label>
-      {cal
-        ?<div className="calrow">
-          <button type="button" className="tapcal" data-k="caltap" onPointerDown={tap} onKeyDown={e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); tap(); } }}>
-            들리는 박에 맞춰 누르세요 <small>{cal.n}/{CAL_TAPS}</small></button>
-          <Chip k="calstop" v="" onPick={end}>취소</Chip>
-        </div>
-        :<Chip k="calstart" v="" onPick={begin}>탭으로 맞추기</Chip>}
-    </details>
-  );
-}
 
 function BeatDots({beats,pos}){
   return <div className="beatdots" aria-hidden="true">{Array.from({length:beats},(_,i)=><i key={i} className={(i===0?'one':'')+(pos&&pos.beat===i?' on':'')}/>)}</div>;
@@ -105,13 +62,16 @@ export default function RoomPage(){
       </section>
 
       {host?<>
-        <TempoBar m={{playing:!!room.grid.playing,pos:room.pos,supported:room.supported,toggle:room.grid.playing?room.stop:room.play}}/>
+        {/* 듣는 기기를 고르기 전에는 재생 버튼 대신 맞추기 단계 (방장 귀에도 같은 박이어야 하므로) */}
+        {room.output
+          ?<TempoBar m={{playing:!!room.grid.playing,pos:room.pos,supported:room.supported,toggle:room.grid.playing?room.stop:room.play}}/>
+          :<LeadSetup room={room}/>}
         <section className="foot" aria-label="방 링크">
           <Chip k="roomcopy" v="" onPick={copyRoom}>{copyNote||'방 링크 복사'}</Chip>
-          <p className="count">이 링크로 들어온 사람은 ‘소리 켜고 참여’를 누르면, 방장이 재생할 때 같은 박을 들어요. 곡은 진행 페이지에서 바꿀 수 있어요.</p>
+          <p className="count">이 링크로 들어온 사람은 듣는 기기를 고르고 참여하면, 방장이 재생할 때 같은 박을 들어요. 곡은 진행 페이지에서 바꿀 수 있어요.</p>
           {copyUrl&&<input className="shareurl" readOnly value={copyUrl} aria-label="방 링크" onFocus={e=>e.target.select()}/>}
         </section>
-      </>:(
+      </>:!room.output?<LeadSetup room={room}/>:(
         <section className="panel guest" aria-label="내 소리">
           {room.ready
             ?<>
@@ -124,7 +84,7 @@ export default function RoomPage(){
         </section>
       )}
 
-      <LeadSetting lead={room.lead} setLead={room.setLead}/>
+      {room.output&&<LeadSetting room={room}/>}
     </main>
   );
 }

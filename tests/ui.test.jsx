@@ -621,8 +621,10 @@ test('합주 방 참여자: 방장 시계에 맞춰, 소리를 켠 뒤 방장이
     grid={playing:true,anchor:epochNow()+AHEAD+300,index:0,bpm:240,beats:2}; sendState();
     await wait(600);
     assert.equal(FakeAudio.clicks||0,0);
-    // 소리를 켜면 이미 진행 중인 박자 격자에 맞춰 바로 울린다 (시계 차이 5초를 반영하지 않으면 5초 동안 조용하다)
-    fireEvent.click(t.container.querySelector('button[data-k="gjoin"]'));
+    // 듣는 기기(스피커·유선)를 고르면 바로 참여해, 이미 진행 중인 박자 격자에 맞춰 울린다
+    // (시계 차이 5초를 반영하지 않으면 5초 동안 조용하다)
+    assert.equal(t.container.querySelector('button[data-k="gjoin"]'),null,'처음에는 참여 버튼 대신 듣는 기기를 묻는다');
+    fireEvent.click(t.container.querySelector('button[data-k="outwired"]'));
     await wait(500);
     assert.ok(FakeAudio.clicks>=1,'방장 격자에 맞춰 클릭');
     assert.match(t.container.querySelector('.gstate').textContent,/재생 중/);
@@ -662,6 +664,9 @@ test('합주 방 방장: 상태·시계 응답을 보내고, 재생·빠르기 �
     assert.ok(Math.abs(pongs[0].th-epochNow())<200,'방장 시계로 답한다');
     assert.match(t.container.querySelector('.conn').textContent,/접속 2명/);
 
+    // 방장도 먼저 듣는 기기를 고른다 (그 전에는 재생 버튼이 없다)
+    assert.equal(t.container.querySelector('button[data-k="mplay"]'),null);
+    fireEvent.click(t.container.querySelector('button[data-k="outwired"]'));
     // 재생: 1.5초 뒤 0번째 박
     t.click('mplay',''); await wait(20);
     const g1=last().grid;
@@ -694,5 +699,43 @@ test('진행 페이지의 합주 방 만들기: 이 기기를 방장으로 기�
     a.addEventListener('click',e=>e.preventDefault()); // jsdom은 페이지 이동을 하지 않는다
     fireEvent.click(a);
     assert.deepEqual(JSON.parse(localStorage.getItem('fretguide.rooms')),[m[1]]);
+  });
+});
+
+test('듣는 기기 맞추기: 블루투스는 탭으로 지연을 재서 그 값으로 참여하고, 다음에 들어오면 묻지 않는다',async()=>{
+  await withRoom(async()=>{
+    const q=(s)=>t.container.querySelector(s);
+    let t=await openRoomAt('btroom01');
+    assert.match(q('.setup').textContent,/무엇으로 들으세요/);
+    // 블루투스 → 탭 측정 화면. 재는 동안 박 점(눈으로 보는 박)은 없다
+    fireEvent.click(q('button[data-k="outbt"]'));
+    assert.ok(q('button[data-k="caltap"]'));
+    assert.equal(q('.beatdots'),null,'재는 동안 박을 눈으로 보여 주지 않는다');
+    // 취소하면 다시 고르기로
+    fireEvent.click(q('button[data-k="calstop"]'));
+    assert.ok(q('button[data-k="outbt"]'));
+    // 다시 재기: 들리는 박(1번 박부터 600ms마다)보다 180ms 늦게 8번 누른다
+    fireEvent.click(q('button[data-k="outbt"]'));
+    const t0=performance.now();
+    for(let k=1;k<=8;k++){
+      const at=600+k*600+180-(performance.now()-t0);
+      if(at>0) await wait(at);
+      fireEvent.pointerDown(q('button[data-k="caltap"]'));
+    }
+    const ms=Number(q('[data-k="calms"]').textContent.replace('ms',''));
+    assert.ok(Math.abs(ms-180)<=40,`잰 지연 ${ms}ms`);
+    fireEvent.click(q('button[data-k="outok"]'));
+    assert.ok(q('.gstate'),'그 값으로 바로 참여');
+    assert.equal(JSON.parse(localStorage.getItem('fretguide.output')),'bt');
+    assert.equal(Number(localStorage.getItem('fretguide.lead')),ms);
+    assert.match(q('.calib summary').textContent,/블루투스.*\d+ms/);
+    // 다음에 들어오면 묻지 않고 참여 버튼이 바로 나온다
+    cleanup(); t=await openRoomAt('btroom01');
+    assert.equal(q('.setup'),null);
+    assert.ok(q('button[data-k="gjoin"]'));
+    // 듣는 기기 다시 고르기
+    fireEvent.click(q('button[data-k="outreset"]'));
+    assert.ok(q('.setup'));
+    assert.equal(localStorage.getItem('fretguide.output'),null);
   });
 });

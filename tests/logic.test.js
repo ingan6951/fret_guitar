@@ -197,3 +197,19 @@ console.log('모든 검사 통과');
   A.equal(Y.cleanRoomId(id),id); A.equal(Y.cleanRoomId('../x'),null); A.equal(Y.cleanRoomId(null),null);
   console.log('합주 방 시계·격자 검사 통과');
 }
+
+// 이어폰 지연 탭 측정
+{
+  const Y=await import('../lib/sync.js');
+  const P=600,S=10000;
+  const taps=d=>d.map((x,i)=>S+(i+1)*P+x); // 1번 박부터 차례로, 박보다 x ms 늦게 누름
+  A.equal(Y.leadFromTaps(taps([0,0,0,0,0,0,0]),S,P),null,'8번 안 되면 아직');
+  const bt=Y.leadFromTaps(taps([260,240,200,195,205,210,190,200]),S,P);
+  A.deepEqual(bt,{ms:200,spread:10,ok:true},'블루투스 약 200ms (처음 두 번은 뺀다)');
+  A.equal(Y.leadFromTaps(taps([380,390,400,410,400,395,405,400]),S,P).ms,400,'300ms 넘는 지연도 다음 박으로 착각하지 않는다');
+  A.equal(Y.leadFromTaps(taps([-40,-30,-20,-25,-30,-20,-35,-25]),S,P).ms,0,'미리 누르는 버릇이면 0');
+  const messy=Y.leadFromTaps(taps([0,0,30,250,-100,180,20,300]),S,P);
+  A.equal(messy.ok,false,'고르지 않으면 다시 재라고 한다');
+  A.equal(Y.leadFromTaps([S+50,...taps([100,100,100,100,100,100,100,100])],S,P).ms,100,'0번 박(시작 전) 탭은 무시');
+  console.log('이어폰 지연 탭 측정 검사 통과');
+}
