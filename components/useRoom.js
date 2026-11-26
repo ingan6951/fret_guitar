@@ -8,7 +8,9 @@ import {createMetronome,audioSupported} from '../lib/metronome.js';
 import {joinRoom,roomConfigured} from '../lib/room.js';
 import {epochNow,pingSample,estimateOffset,retime,gridKey} from '../lib/sync.js';
 
-const ROOMS_KEY='fretguide.rooms',LEAD_KEY='fretguide.lead';
+const ROOMS_KEY='fretguide.rooms',LEAD_KEY='fretguide.lead',OUT_KEY='fretguide.output';
+// 듣는 기기: 'wired'(휴대폰 스피커·유선 이어폰) | 'bt'(블루투스 이어폰) | null(아직 안 고름 → 방에 들어오면 먼저 묻는다)
+export const loadOutput=()=>{ const v=readJSON(OUT_KEY,null); return v==='wired'||v==='bt'?v:null; };
 export const START_DELAY=1500;  // 방장이 누른 뒤 첫 박까지: 메시지가 모두에게 닿을 여유
 export const RETIME_AHEAD=700;  // 재생 중 빠르기를 바꾸면 이만큼 뒤의 박부터
 export const MAX_LEAD=400;
@@ -34,6 +36,7 @@ export default function useRoom(id,song){ // song(방장만): {t,bpm,ts} — 방
   const [ready,setReadyState]=useState(false);   // 이 기기에서 소리를 내는 중(참여)
   const [pos,setPos]=useState(null);
   const [lead,setLeadState]=useState(0);
+  const [output,setOutputState]=useState(null);
   const [supported,setSupported]=useState(null);
 
   const R=useRef({role:null,grid:{playing:false},clock:null,ready:false,lead:0,song:null,conn:null,me:null,samples:[],applied:'stop',appliedGrid:'stop',lastV:0});
@@ -75,7 +78,7 @@ export default function useRoom(id,song){ // song(방장만): {t,bpm,ts} — 방
 
   useEffect(()=>{
     setSupported(audioSupported());
-    const l=loadLead(); R.current.lead=l; setLeadState(l);
+    const l=loadLead(); R.current.lead=l; setLeadState(l); setOutputState(loadOutput());
     if(!id) return;
     if(!roomConfigured()){ setStatus('off'); return; }
     const r=R.current;
@@ -153,8 +156,16 @@ export default function useRoom(id,song){ // song(방장만): {t,bpm,ts} — 방
     R.current.lead=v; setLeadState(v); apply();
   };
 
+  // 듣는 기기를 정하고(보정값도 함께) 기기에 저장한다. null이면 다시 고르게 한다(소리는 끈다).
+  const setOutput=(kind,ms)=>{
+    try{ if(kind) localStorage.setItem(OUT_KEY,JSON.stringify(kind)); else localStorage.removeItem(OUT_KEY); }catch(e){}
+    setOutputState(kind);
+    if(ms!==undefined) setLead(ms);
+    if(!kind&&R.current.ready&&R.current.role!=='host') setReady(false);
+  };
+
   const hostOnline=role==='host'||peers.some(p=>p.role==='host');
-  return {role,status,peers,hostOnline,clock,grid,ready,pos,lead,supported,
+  return {role,status,peers,hostOnline,clock,grid,ready,pos,lead,output,supported,
     song:role==='host'?R.current.song:remoteSong,
-    join,leave,play,stop,setLead};
+    join,leave,play,stop,setLead,setOutput};
 }
