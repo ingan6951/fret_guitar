@@ -17,7 +17,7 @@ try{
     const outfile=join(out,f.replace(/\.jsx$/,'.mjs'));
     await build({entryPoints:[join(root,'tests',f)],outfile,bundle:true,platform:'node',format:'esm',
       jsx:'automatic',packages:'external',
-      alias:{'next/link':join(root,'tests','shims','link.jsx'),'next/navigation':join(root,'tests','shims','navigation.js')},absWorkingDir:root,logLevel:'warning',
+      alias:{'next/link':join(root,'tests','shims','link.jsx'),'next/navigation':join(root,'tests','shims','navigation.js'),'@supabase/supabase-js':join(root,'tests','shims','supabase.js')},absWorkingDir:root,logLevel:'warning',
       banner:{js:`import {createRequire} from 'module';const require=createRequire(import.meta.url);`}});
     const r=spawnSync(process.execPath,['--import',pathToFileURL(join(root,'tests','setup-dom.js')).href,'--test','--test-reporter=spec',outfile],{stdio:'inherit',cwd:root});
     if(r.status!==0) failed=true;

@@ -38,7 +38,11 @@ export default function NoteTable({edit=false}){
           ])}
         </div>
       </div>
-      {!edit&&<p className="count">음을 누르면 같은 음이 지판 어디에 있는지 모두 보여요 · <i className="lg rt"></i>근음 <i className="lg ct"></i>구성음(보고 있는 코드)</p>}
+      {!edit&&<div className="nlegend">
+        <span><i className="lg rt"></i>근음</span>
+        <span><i className="lg ct"></i>구성음</span>
+        <span><i className="lg pf"></i>{focus===null?'음을 누르면 같은 음을 모두 표시':`누른 음 ${nm[focus]} (같은 음 모두)`}</span>
+      </div>}
     </div>
   );
 }

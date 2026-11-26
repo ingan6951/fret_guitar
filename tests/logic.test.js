@@ -152,3 +152,48 @@ console.log('모든 검사 통과');
   A.equal(L.isNote({s:0,f:1}),true); A.equal(L.isNote(cm),false);
   console.log('진행 데이터·링크 검사 통과');
 }
+
+// 곡 빠르기·박자와 메트로놈 박자 격자 (합주: 늦게 시작한 사람도 같은 박에 맞아야 한다)
+{
+  const S=await import('../lib/settings.js');
+  const M=await import('../lib/metronome.js');
+  A.equal(S.cleanBpm(120),120); A.equal(S.cleanBpm('96'),96); A.equal(S.cleanBpm(10),S.MIN_BPM); A.equal(S.cleanBpm(999),S.MAX_BPM);
+  A.equal(S.cleanBpm('abc'),S.DEFAULT_BPM); A.equal(S.cleanBpm(undefined),S.DEFAULT_BPM); A.equal(S.cleanBpm(100.6),101);
+  A.equal(S.cleanBeats('3'),3); A.equal(S.cleanBeats(9),S.DEFAULT_BEATS); A.equal(S.cleanBeats(null),S.DEFAULT_BEATS);
+  // 예전 저장값(빠르기 없음)은 기본 빠르기로, 잘못된 값은 범위 안으로
+  const s=S.sanitize({lists:[{title:'a',bars:[]},{title:'b',bars:[],bpm:140,beats:3},{title:'c',bars:[],bpm:'x',beats:11}]});
+  A.deepEqual(s.lists.map(l=>[l.bpm,l.beats]),[[S.DEFAULT_BPM,S.DEFAULT_BEATS],[140,3],[S.DEFAULT_BPM,S.DEFAULT_BEATS]]);
+  A.equal(S.sanitize({prog:[]}).lists[0].bpm,S.DEFAULT_BPM);
+  A.deepEqual(S.newList('x').bpm,S.DEFAULT_BPM);
+  // 박자 격자: 120BPM이면 0.5초마다. 시작 전이면 0번째 박, 지난 뒤면 다음 박
+  A.deepEqual(M.firstBeat(10,9,120),{index:0,time:10});
+  A.deepEqual(M.firstBeat(10,10,120),{index:0,time:10});
+  A.deepEqual(M.firstBeat(10,10.1,120),{index:1,time:10.5});
+  A.deepEqual(M.firstBeat(10,11.5,120),{index:3,time:11.5},'박 위에 정확히 있으면 그 박');
+  const f=M.firstBeat(0,123.456,97); A.ok(f.time>=123.456&&f.time-123.456<60/97+1e-9,'늦게 들어와도 한 박 안에 맞춘다');
+  A.ok(Math.abs((f.time/(60/97))-f.index)<1e-6,'격자 위의 시각');
+  A.deepEqual(M.beatPos(0,4),{beat:0,bar:0}); A.deepEqual(M.beatPos(7,4),{beat:3,bar:1}); A.deepEqual(M.beatPos(9,3),{beat:0,bar:3});
+  console.log('곡 빠르기·메트로놈 박자 검사 통과');
+}
+
+// 합주 방: 시계 차이 추정과 박자 격자 이어 가기
+{
+  const Y=await import('../lib/sync.js');
+  // 방장 시계가 5000ms 빠르고, 가는 길 20ms·오는 길 20ms면 차이를 정확히 잰다
+  A.deepEqual(Y.pingSample(1000,6020,1040),{rtt:40,offset:5000});
+  // 왕복이 긴(한쪽만 막힌) 샘플은 버리고 짧은 것들의 중앙값을 쓴다
+  const ss=[Y.pingSample(0,5020,40),Y.pingSample(100,5130,160),Y.pingSample(200,5400,800),Y.pingSample(300,5321,342),Y.pingSample(400,5600,1300),Y.pingSample(500,5519,540)];
+  const est=Y.estimateOffset(ss);
+  A.ok(Math.abs(est.offset-5000)<=2,`차이 추정 ${est.offset}`); A.equal(est.err,20);
+  A.equal(Y.estimateOffset([]),null); A.equal(Y.estimateOffset([{rtt:NaN,offset:1}]),null);
+  // 120BPM(500ms)으로 1000ms에 0번째 박 → 2100ms 이후 첫 박은 2500ms(4번째), 빠르기만 바꾸면 번호를 이어 간다
+  const g={playing:true,anchor:1000,index:0,bpm:120,beats:4};
+  A.deepEqual(Y.retime(g,2100,{bpm:100,beats:4}),{playing:true,anchor:2500,index:3,bpm:100,beats:4});
+  A.deepEqual(Y.retime(g,2500,{bpm:100,beats:4}).anchor,2500,'박 위에 정확히 있으면 그 박');
+  A.deepEqual(Y.retime(g,2100,{bpm:120,beats:3}).index,0,'박 수가 바뀌면 새 마디 첫 박');
+  A.deepEqual(Y.retime({...g,index:7},0,{bpm:90,beats:4}),{playing:true,anchor:1000,index:7,bpm:90,beats:4},'시작 전이면 그대로');
+  A.equal(Y.gridKey({playing:false}),'stop'); A.equal(Y.gridKey(g),'1000|0|120|4');
+  const id=Y.newRoomId(); A.match(id,/^[a-z0-9]{10}$/); A.notEqual(id,Y.newRoomId());
+  A.equal(Y.cleanRoomId(id),id); A.equal(Y.cleanRoomId('../x'),null); A.equal(Y.cleanRoomId(null),null);
+  console.log('합주 방 시계·격자 검사 통과');
+}
