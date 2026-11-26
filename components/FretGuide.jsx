@@ -2,7 +2,7 @@
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
-import {DEFAULT,MAX_PROG,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
+import {DEFAULT,MIN_BARS,MAX_PROG,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const LABELS=[['note','음이름'],['degree','도수']];
@@ -18,11 +18,9 @@ function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
 export default function FretGuide(){
   const [state,setState]=useState(DEFAULT);
   const [ready,setReady]=useState(false);
-  const [sel,setSel]=useState(null); // 진행에서 고른 칩의 순번: 그 자리를 다시 고르거나 제거할 대상
+  const [sel,setSel]=useState(0); // 선택한 마디: 아래에서 고른 폼이 이 마디에 들어간다
   const [showAll,setShowAll]=useState(false); // 진행에 담은 폼을 차례로 모아 보기
 
-  const [chart,setChart]=useState(false); // 진행을 코드 차트(마디) 악보로 보기
-  const [perBar,setPerBar]=useState(1);   // 한 마디에 들어가는 코드 수
   const [shareNote,setShareNote]=useState(''); // 링크 복사 결과 안내
   const [shareUrl,setShareUrl]=useState('');   // 복사가 막힌 브라우저에서 직접 복사하도록 보여 주는 주소
 
@@ -31,7 +29,7 @@ export default function FretGuide(){
     // 공유 링크(?p=...)로 들어오면 그 진행을 불러온다 (저장해 둔 다른 설정은 그대로)
     try{
       const url=new URL(window.location.href),shared=decodeProg(url.searchParams.get('p'));
-      if(shared.length){ s={...(s||DEFAULT),prog:shared}; url.searchParams.delete('p'); window.history.replaceState(null,'',url.pathname+url.search+url.hash); }
+      if(shared.some(Boolean)){ s={...(s||DEFAULT),prog:shared}; url.searchParams.delete('p'); window.history.replaceState(null,'',url.pathname+url.search+url.hash); }
     }catch(e){}
     if(s) setState(s);
     setReady(true);
@@ -46,8 +44,8 @@ export default function FretGuide(){
       case 'n': return {...s,n:Number(v)};
       case 'label': return {...s,label:v};
       case 'acc': return {...s,flat:v==='flat'};
-      case 'pdel': return {...s,prog:s.prog.filter((_,j)=>j!==Number(v))};
-      case 'pclear': return {...s,prog:[]};
+      case 'pdel': return {...s,prog:s.prog.map((e,j)=>j===Number(v)?null:e)};
+      case 'pclear': return {...s,prog:Array(MIN_BARS).fill(null)};
       default: return s;
     }
   });
@@ -58,21 +56,23 @@ export default function FretGuide(){
   const sym=nm[root]+q.suffix;
   const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
 
-  // 진행에 담은 폼은 운지째로 보관한다 (조건을 바꿔도 그대로)
-  const resolved=useMemo(()=>prog.map(e=>voicingFromFrets(e.root,e.q,e.frets)),[prog]);
-  const selOk=sel!==null&&sel<prog.length?sel:null;
-  const viewAll=showAll&&prog.length>0;
+  // 마디에 담은 폼은 운지째로 보관한다 (조건을 바꿔도 그대로). 빈 마디는 null.
+  const resolved=useMemo(()=>prog.map(e=>e?voicingFromFrets(e.root,e.q,e.frets):null),[prog]);
+  const sl=Math.min(sel,prog.length-1); // 선택한 마디
+  const selFilled=!!prog[sl];
+  const filled=prog.map((e,i)=>e?i:-1).filter(i=>i>=0); // 코드가 들어 있는 마디 순번
+  const viewAll=showAll&&filled.length>0;
 
   // 이 코드의 폼 (데이터에 적힌 것만)
   const list=useMemo(()=>formsFor(root,qid,n),[root,qid,n]);
 
-  // 칩을 누르면 그 자리가 선택되고(코드도 불러옴) 다시 누르면 풀린다. 선택하면 그 자리를 다시 고르는 상태가 된다.
+  // 마디를 누르면 그 마디가 선택되고(코드가 들어 있으면 그 코드를 불러옴), 아래에서 고른 폼이 그 마디에 들어간다.
   const choose=i=>{
     setShowAll(false);
-    if(selOk===i){ setSel(null); return; }
     setSel(i);
     setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q}:s);
   };
+  const addBar=()=>{ setState(s=>s.prog.length>=MAX_PROG?s:{...s,prog:[...s.prog,null]}); setSel(prog.length); setShowAll(false); };
   const shareProg=async()=>{
     try{
       const url=new URL(window.location.href); url.search=''; url.hash='';
@@ -84,30 +84,29 @@ export default function FretGuide(){
     }catch(e){ setShareNote(''); }
   };
   const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r)});
-  const addForm=r=>setState(s=>s.prog.length>=MAX_PROG?s:{...s,prog:[...s.prog,entryOf(s,r)]});
-  const replaceForm=r=>{ setState(s=>s.prog[selOk]?{...s,prog:s.prog.map((e,j)=>j===selOk?entryOf(s,r):e)}:s); setSel(null); };
-  const delSel=()=>{ pick('pdel',String(selOk)); setSel(null); };
+  // 선택한 마디에 폼을 넣고(이미 있으면 바꾸고) 다음 마디를 고른 상태로 넘어간다
+  const putForm=r=>{ setState(s=>({...s,prog:s.prog.map((e,j)=>j===sl?entryOf(s,r):e)})); setSel(Math.min(sl+1,prog.length-1)); };
+  const delSel=()=>{ pick('pdel',String(sl)); };
 
-  // 폼 카드 순서: 진행이 비었으면 낮은 프렛부터. 진행이 있으면 앞 폼에서 이동이 적은 순.
-  // 이미 담은 자리를 다시 고르는 중이면 앞뒤 폼 모두에서 가까운 순 (이웃 폼은 그대로 두므로 어긋남이 생기지 않는다).
-  const before=selOk!==null?resolved[selOk-1]:resolved[resolved.length-1];
-  const after=selOk!==null?resolved[selOk+1]:undefined;
+  // 폼 카드 순서: 앞뒤 마디에 코드가 없으면 낮은 프렛부터. 있으면 앞뒤 폼에서 이동이 적은 순
+  // (다시 고르는 마디의 이웃 폼은 그대로 두므로 어긋남이 생기지 않는다).
+  const bi=[...filled].reverse().find(i=>i<sl);
+  const ai=filled.find(i=>i>sl);
+  const before=bi!==undefined?resolved[bi]:undefined;
+  const after=ai!==undefined?resolved[ai]:undefined;
   const shown=useMemo(()=>{
     const items=list.map((res,i)=>({res,i,cost:(before?moveCost(before,res):0)+(after?moveCost(res,after):0)}));
     if(before||after) items.sort((a,b)=>a.cost-b.cost||a.i-b.i);
     return items;
   },[list,before,after]);
-  const bi=selOk!==null?selOk-1:prog.length-1; // 기준이 되는 앞 폼의 순번
-  const ai=selOk!==null&&selOk+1<prog.length?selOk+1:-1; // 다시 고르는 중이면 뒤 폼도
-  const refs=[bi>=0?{i:bi,tag:'이전 폼'}:null,ai>=0?{i:ai,tag:'다음 폼'}:null].filter(Boolean);
-  const curKey=selOk!==null?keyOf(prog[selOk].root,prog[selOk].q,prog[selOk].frets):null;
-  const full=prog.length>=MAX_PROG;
+  const refs=[bi!==undefined?{i:bi,tag:'이전 폼'}:null,ai!==undefined?{i:ai,tag:'다음 폼'}:null].filter(Boolean);
+  const curKey=selFilled?keyOf(prog[sl].root,prog[sl].q,prog[sl].frets):null;
   const hand=r=>handPos(r);
   const gap=(a,b)=>Math.abs(hand(a)-hand(b));
   const moveText=d=>d===0?'제자리':`${d}프렛 이동`;
 
   // 진행 전체 이동 합
-  const moved=resolved.reduce((sum,r,i)=>i?sum+gap(resolved[i-1],r):0,0);
+  const moved=filled.reduce((sum,idx,k)=>k?sum+gap(resolved[filled[k-1]],resolved[idx]):0,0);
 
   const fmt=n=>n.toLocaleString('ko-KR');
   // 좁은 화면에서는 카드를 가로로 한 장씩 넘겨 본다 (넓은 화면에서는 격자). 목록이 바뀌면 첫 장으로 돌아간다.
@@ -135,21 +134,21 @@ export default function FretGuide(){
   let cards,count,nCards=1;
   const solo=!viewAll&&shown.length===1;
   if(viewAll){
-    nCards=prog.length;
-    cards=prog.map((c,i)=>{
-      const res=resolved[i],name=chordName(c);
-      const d=i?gap(resolved[i-1],res):null;
+    nCards=filled.length;
+    cards=filled.map((i,k)=>{
+      const c=prog[i],res=resolved[i],name=chordName(c);
+      const d=k?gap(resolved[filled[k-1]],res):null;
       return (
         <figure className="card" key={i+keyOf(c.root,c.q,c.frets)}>
           <figcaption>
-            <div className="who"><b>{i+1}. {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
+            <div className="who"><b>{i+1}마디 {name}</b><span>{res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
             <div className="capr"><div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div></div>
           </figcaption>
           <Diagram res={res} rootPc={c.root} quality={QUALITIES.find(x=>x.id===c.q)} label={label} names={nm} aria={ariaFor(res,name)}/>
         </figure>
       );
     });
-    count=`진행 ${prog.length}개 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`;
+    count=`진행 ${filled.length}개 · 총 손 이동 ${moved}프렛 · 위치는 검지가 놓이는 프렛`;
   }else{
     nCards=shown.length||1;
     cards=shown.length?shown.map(({res},i)=>{
@@ -163,16 +162,16 @@ export default function FretGuide(){
               {cur&&<span className="curtag">지금 이 자리</span>}</div>
             <div className="capr">
               <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
-              {selOk!==null
-                ?<Chip k="frep" v={String(i)} className="plus" onPick={()=>replaceForm(res)} aria-label={`${selOk+1}번째 코드를 이 폼으로 바꾸기`}>↺</Chip>
-                :<Chip k="fadd" v={String(i)} className="plus" disabled={full} onPick={()=>addForm(res)} aria-label={`${sym} 폼을 진행에 추가`}>+</Chip>}
+              {selFilled
+                ?<Chip k="frep" v={String(i)} className="plus" onPick={()=>putForm(res)} aria-label={`${sl+1}마디를 이 폼으로 바꾸기`}>↺</Chip>
+                :<Chip k="fadd" v={String(i)} className="plus" onPick={()=>putForm(res)} aria-label={`${sl+1}마디에 ${sym} 폼 넣기`}>+</Chip>}
             </div>
           </figcaption>
           <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
         </figure>
       );
     }):<div className="empty"><p>이 코드의 폼 데이터가 아직 없어요.</p></div>;
-    count=`폼 ${shown.length}개`+(selOk!==null?` · ${selOk+1}번째 자리를 앞뒤 폼과 가까운 순`:before?' · 이전 폼에서 가까운 순':'');
+    count=`폼 ${shown.length}개`+(selFilled?` · ${sl+1}마디를 앞뒤 폼과 가까운 순`:before||after?' · 앞뒤 폼에서 가까운 순':'');
   }
 
   return (
@@ -225,45 +224,29 @@ export default function FretGuide(){
           </details>
         </div>
 
-        {prog.length>0&&(
-          <div className="prog">
-            <div className="prog-list" aria-label="진행">
+        <div className="prog">
+          <div className="chart" aria-label="코드 차트">
+            <div className="bars">
               {prog.map((c,i)=>(
-                <span key={i} style={{display:'contents'}}>
-                  {i>0&&<span className="arrow" aria-hidden="true">→<small>{gap(resolved[i-1],resolved[i])}</small></span>}
-                  <button className="chip" type="button" data-k="psel" data-v={String(i)} aria-pressed={String(selOk===i)}
-                    aria-label={`${i+1}번째 ${chordName(c)} 선택`} onClick={()=>choose(i)}>{chordName(c)}<small>{resolved[i].baseFret===0?'개방':resolved[i].baseFret+'프렛'}</small></button>
-                </span>
+                <button key={i} type="button" className={'bar'+(sl===i?' sel':'')+(c?'':' blank')} data-k="bar" data-v={String(i)}
+                  aria-pressed={String(sl===i)} aria-label={c?`${i+1}마디 ${chordName(c)} 선택`:`${i+1}마디 비어 있음, 선택`} onClick={()=>choose(i)}>
+                  <small className="bn">{i+1}</small>
+                  {c?<span className="bc"><b>{chordName(c)}</b><small>{resolved[i].baseFret===0?'개방':resolved[i].baseFret+'프렛'}</small></span>
+                    :<span className="bc"><em>비어 있음</em></span>}
+                </button>
               ))}
             </div>
-            <div className="prog-actions">
-              <span className="selname">{selOk!==null?`${selOk+1}번째 ${chordName(prog[selOk])}: 바꿀 폼을 ↺로 고르세요`:`총 손 이동 ${moved}프렛 · 아래에서 다음 코드를 고르고 +`}</span>
-              {selOk!==null&&<Chip k="pdel" v={String(selOk)} onPick={delSel}>제거</Chip>}
-              <Chip k="pview" v="" on={showAll} onPick={()=>setShowAll(v=>!v)}>{viewAll?'폼 고르기':'진행 보기'}</Chip>
-              <Chip k="pchart" v="" on={chart} onPick={()=>setChart(v=>!v)}>악보</Chip>
-              <Chip k="pshare" v="" onPick={shareProg}>{shareNote||'링크 복사'}</Chip>
-              <Chip k="pclear" v="" onPick={(k,v)=>{ pick(k,v); setSel(null); setShowAll(false); }}>비우기</Chip>
-            </div>
-            {chart&&(
-              <div className="chart" aria-label="코드 차트">
-                <div className="seg compact" role="group" aria-label="마디당 코드 수">
-                  {[1,2].map(n=><Chip key={n} k="perbar" v={String(n)} on={perBar===n} onPick={()=>setPerBar(n)}>{`한 마디에 ${n}개`}</Chip>)}
-                </div>
-                <div className="bars">
-                  {Array.from({length:Math.ceil(prog.length/perBar)},(_,m)=>(
-                    <div className="bar" key={m} data-k="bar" data-v={String(m)}>
-                      {prog.slice(m*perBar,m*perBar+perBar).map((c,j)=>{
-                        const i=m*perBar+j;
-                        return <span className="bc" key={i}><b>{chordName(c)}</b><small>{resolved[i].baseFret===0?'개방':resolved[i].baseFret+'프렛'}</small></span>;
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {shareUrl&&<input className="shareurl" readOnly value={shareUrl} aria-label="공유 링크" onFocus={e=>e.target.select()}/>}
+            {prog.length<MAX_PROG&&<button type="button" className="chip addbar" data-k="padd" onClick={addBar} aria-label="다음 마디 추가">＋ 마디 추가</button>}
           </div>
-        )}
+          <div className="prog-actions">
+            <span className="selname">{sl+1}마디 선택됨 · {selFilled?`${chordName(prog[sl])} (다른 폼은 아래에서 ↺)`:'아래에서 코드를 고르고 +'}{filled.length>1?` · 총 손 이동 ${moved}프렛`:''}</span>
+            {selFilled&&<Chip k="pdel" v={String(sl)} onPick={delSel}>마디 비우기</Chip>}
+            {filled.length>0&&<Chip k="pview" v="" on={showAll} onPick={()=>setShowAll(v=>!v)}>{viewAll?'폼 고르기':'진행 보기'}</Chip>}
+            {filled.length>0&&<Chip k="pshare" v="" onPick={shareProg}>{shareNote||'링크 복사'}</Chip>}
+            {filled.length>0&&<Chip k="pclear" v="" onPick={(k,v)=>{ pick(k,v); setSel(0); setShowAll(false); }}>전체 비우기</Chip>}
+          </div>
+          {shareUrl&&<input className="shareurl" readOnly value={shareUrl} aria-label="공유 링크" onFocus={e=>e.target.select()}/>}
+        </div>
 
         {!viewAll&&refs.length>0&&(
           <div className="refs" aria-label="기준 폼">

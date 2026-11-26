@@ -108,14 +108,19 @@ console.log('모든 검사 통과');
   console.log('음 개수 검사 통과');
 }
 
-// 진행 공유 링크 변환
+// 진행 공유 링크 변환 (마디 4~8개, 빈 마디는 null)
 {
   const S=await import('../lib/settings.js');
-  const prog=[{root:0,q:'maj',frets:[null,3,2,0,1,0]},{root:9,q:'min',frets:[5,7,7,5,5,5]}];
-  A.deepEqual(S.decodeProg(S.encodeProg(prog)),prog,'링크 왕복');
+  const prog=[{root:0,q:'maj',frets:[null,3,2,0,1,0]},null,{root:9,q:'min',frets:[5,7,7,5,5,5]},null];
+  A.deepEqual(S.decodeProg(S.encodeProg(prog)),prog,'링크 왕복(빈 마디 포함)');
+  const five=[...prog,{root:7,q:'maj',frets:[3,2,0,0,0,3]}];
+  A.deepEqual(S.decodeProg(S.encodeProg(five)),five,'5마디 왕복');
+  A.deepEqual(S.decodeProg('0-maj-x.3.2.0.1.0').length,4,'마디가 4개 미만이면 빈 마디로 채운다');
   A.deepEqual(S.decodeProg('broken'),[],'잘못된 링크');
+  A.deepEqual(S.decodeProg('_~_'),[],'코드가 하나도 없으면 무시');
   A.deepEqual(S.decodeProg('0-nope-1.2.3.4.5.6'),[],'없는 코드 종류');
   A.deepEqual(S.decodeProg('0-maj-1.2.3'),[],'줄 수가 맞지 않음');
-  A.equal(S.decodeProg(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8개');
+  A.equal(S.decodeProg(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8마디');
+  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).prog.length,4,'저장값이 짧아도 4마디');
   console.log('링크 변환 검사 통과');
 }

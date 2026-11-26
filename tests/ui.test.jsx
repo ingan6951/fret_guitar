@@ -23,7 +23,7 @@ function boot(saved){
   const count=()=>r.container.querySelector('.count').textContent;
   return {...r,btn,flags,click,svgs,state,count};
 }
-const chipNames=t=>[...t.container.querySelectorAll('button[data-k="psel"]')].map(b=>b.firstChild.textContent);
+const barNames=t=>[...t.container.querySelectorAll('.bars .bar')].map(b=>{ const x=b.querySelector('.bc b'); return x?x.textContent:''; });
 const addFirst=t=>fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
 const nameOf=c=>NOTE_SHARP[c.root]+QUALITIES.find(q=>q.id===c.q).suffix;
 
@@ -109,69 +109,89 @@ test('설정 저장·복원, 데이터에 없거나 잘못된 저장값은 기�
   assert.equal(d.container.querySelector('.sym').textContent,'Am');
 });
 
-test('진행: 폼의 + 로 시작해 다음 코드 폼을 이어 담는다 (최대 8개)',()=>{
+test('마디: 처음에는 빈 마디 4개가 있고 1마디가 선택돼 있다',()=>{
   const t=boot();
-  assert.equal(t.container.querySelector('.prog'),null,'처음엔 진행이 없다');
+  assert.equal(t.container.querySelectorAll('.bars .bar').length,4);
+  assert.equal(t.container.querySelectorAll('.bars .bar.blank').length,4);
+  assert.equal(t.btn('bar','0').getAttribute('aria-pressed'),'true');
+  assert.ok(t.container.querySelector('button[data-k="padd"]'),'마디 추가 버튼');
+  for(const k of ['pview','pshare','pclear','pdel']) assert.equal(t.container.querySelector(`button[data-k="${k}"]`),null,`${k}는 코드가 들어간 뒤에 나온다`);
+  assert.deepEqual(barNames(t),['','','','']);
+});
+
+test('마디에 코드 넣기: + 로 선택한 마디에 넣고 다음 마디로 넘어간다',()=>{
+  const t=boot();
   addFirst(t);
-  assert.deepEqual(chipNames(t),['Am']);
+  assert.deepEqual(barNames(t),['Am','','','']);
   assert.equal(t.state().prog[0].frets.length,6);
+  assert.equal(t.btn('bar','1').getAttribute('aria-pressed'),'true','다음 마디가 선택된다');
   // 다음 코드를 고르는 동안 이전 폼을 보여 준다
   assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼']);
   assert.match(t.container.querySelector('.refs .card.ref').textContent,/1\. Am/);
   t.click('root','0'); t.click('q','maj'); addFirst(t);
   t.click('root','7'); addFirst(t);
-  assert.deepEqual(chipNames(t),['Am','C','G']);
-  // 최대 8개
-  for(let i=0;i<5;i++) addFirst(t);
-  assert.equal(t.state().prog.length,8);
-  assert.equal(t.container.querySelector('button[data-k="fadd"]').disabled,true);
+  assert.deepEqual(barNames(t),['Am','C','G','']);
+  assert.equal(t.state().prog.length,4);
+});
+
+test('마디 추가: 하단 + 로 8마디까지 늘릴 수 있다',()=>{
+  const t=boot();
+  for(let i=0;i<4;i++) fireEvent.click(t.container.querySelector('button[data-k="padd"]'));
+  assert.equal(t.container.querySelectorAll('.bars .bar').length,8);
+  assert.equal(t.container.querySelector('button[data-k="padd"]'),null,'8마디가 최대');
+  assert.equal(t.btn('bar','7').getAttribute('aria-pressed'),'true','새 마디가 선택된다');
+  addFirst(t);
+  assert.equal(barNames(t)[7],'Am');
   // 복원
   const raw=JSON.stringify(t.state());
   cleanup();
   const b=boot(raw);
-  assert.equal(chipNames(b).length,8);
+  assert.equal(b.container.querySelectorAll('.bars .bar').length,8);
+  assert.equal(barNames(b)[7],'Am');
 });
 
-test('진행: 칩을 골라 그 자리를 다시 고르거나 제거한다 (C–Am–Dm–G)',()=>{
+test('마디 선택: 빈 마디를 건너뛰고 채우거나, 찬 마디를 다시 고르거나 비운다 (C–Am–Dm–G)',()=>{
   const t=boot();
   for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj']]){ t.click('root',String(r)); t.click('q',q); addFirst(t); }
-  assert.deepEqual(chipNames(t),['C','Am','Dm','G']);
+  assert.deepEqual(barNames(t),['C','Am','Dm','G']);
   const keep=t.state().prog.map(e=>e.frets.join());
-  // Am 선택: 코드를 불러오고, 카드는 ↺ 로 바뀌고, 앞뒤 폼을 보여 준다
-  t.click('psel','1');
+  // Am 마디 선택: 코드를 불러오고, 카드는 ↺ 로 바뀌고, 앞뒤 폼을 보여 준다
+  t.click('bar','1');
   assert.deepEqual([t.state().root,t.state().q],[9,'min']);
-  assert.equal(t.btn('psel','1').getAttribute('aria-pressed'),'true');
+  assert.equal(t.btn('bar','1').getAttribute('aria-pressed'),'true');
   assert.equal(t.container.querySelector('button[data-k="fadd"]'),null);
   assert.ok(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
-  assert.ok(t.container.querySelector('.cards .card.cur'),'지금 자리의 폼 표시');
+  assert.ok(t.container.querySelector('.cards .card.cur'),'지금 마디의 폼 표시');
   assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼','다음 폼']);
   assert.match(t.container.querySelector('.cards .move').textContent,/앞 .* 뒤 /);
-  // 다시 누르면 선택이 풀리고 + 로 돌아간다
-  t.click('psel','1');
-  assert.ok(t.container.querySelector('button[data-k="fadd"]'));
-  // 다른 코드로 교체: Am → Em
-  t.click('psel','1'); t.click('root','4'); t.click('q','min');
+  // 다른 코드로 교체: Am → Em, 이웃 마디는 그대로
+  t.click('root','4'); t.click('q','min');
   fireEvent.click(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
-  assert.deepEqual(chipNames(t),['C','Em','Dm','G']);
+  assert.deepEqual(barNames(t),['C','Em','Dm','G']);
   const now=t.state().prog.map(e=>e.frets.join());
   assert.equal(now[0],keep[0]); assert.equal(now[2],keep[2]); assert.equal(now[3],keep[3]);
   assert.notEqual(now[1],keep[1]);
-  // 제거: 이웃 폼은 그대로, 이동 거리만 다시 계산된다
-  const before=t.state().prog.map(e=>e.frets.join());
-  t.click('psel','1'); t.click('pdel','1');
-  assert.deepEqual(chipNames(t),['C','Dm','G']);
-  assert.deepEqual(t.state().prog.map(e=>e.frets.join()),[before[0],before[2],before[3]]);
+  // 마디 비우기: 그 마디만 비고 이웃 폼은 그대로
+  t.click('bar','1'); t.click('pdel','1');
+  assert.deepEqual(barNames(t),['C','','Dm','G']);
+  assert.equal(t.state().prog.length,4);
+  // 빈 마디 건너뛰고 4마디 앞 쪽 마디에 채우기: 1마디 선택 → 다음 칸(2마디)로 넘어가지 않고 선택한 마디에 들어간다
+  t.click('bar','1'); t.click('root','9'); t.click('q','min'); addFirst(t);
+  assert.deepEqual(barNames(t),['C','Am','Dm','G']);
   // 진행 보기: 담은 폼이 차례로 모이고 넘기기가 생긴다
+  t.click('bar','1'); t.click('pdel','1');
   t.click('pview','');
   assert.equal(t.svgs(),3);
   assert.match(t.count(),/진행 3개 · 총 손 이동 \d+프렛/);
   assert.equal(t.container.querySelector('.refs'),null,'모아 볼 때는 기준 폼을 숨긴다');
   assert.ok(t.container.querySelector('.slidenav'));
   t.click('pview','');
-  // 비우기
+  // 전체 비우기: 빈 마디 4개로 돌아간다
+  fireEvent.click(t.container.querySelector('button[data-k="padd"]'));
   t.click('pclear','');
-  assert.equal(t.state().prog.length,0);
-  assert.equal(t.container.querySelector('.prog'),null);
+  assert.equal(t.container.querySelectorAll('.bars .bar').length,4);
+  assert.deepEqual(barNames(t),['','','','']);
+  assert.equal(t.btn('bar','0').getAttribute('aria-pressed'),'true');
 });
 
 test('아무렇게나 눌러도 폼이 항상 보인다',()=>{
@@ -192,14 +212,16 @@ test('아무렇게나 눌러도 폼이 항상 보인다',()=>{
   }
 });
 
-test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 진행이 나온다',async()=>{
+test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 마디 진행이 나온다',async()=>{
   let copied='';
   Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{ copied=t; }},configurable:true});
   const t=boot();
   addFirst(t);
   t.click('root','0'); t.click('q','maj'); addFirst(t);
+  fireEvent.click(t.container.querySelector('button[data-k="padd"]')); // 5마디로 늘리고 3·4마디는 비워 둔다
   t.click('root','7'); addFirst(t);
   const saved=t.state().prog;
+  assert.deepEqual(barNames(t),['Am','C','','','G']);
   await act(async()=>{ fireEvent.click(t.container.querySelector('button[data-k="pshare"]')); });
   assert.match(copied,/\?p=/);
   assert.match(t.container.querySelector('button[data-k="pshare"]').textContent,/복사됨/);
@@ -208,26 +230,12 @@ test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 
   cleanup(); localStorage.clear();
   window.history.pushState(null,'','/?p='+encodeURIComponent(p));
   const u=boot();
-  assert.deepEqual(chipNames(u),['Am','C','G']);
+  assert.deepEqual(barNames(u),['Am','C','','','G']);
   assert.deepEqual(u.state().prog,saved);
   assert.equal(window.location.search,'','불러온 뒤에는 주소의 진행 값을 지운다');
   // 잘못된 링크는 무시한다
   cleanup(); localStorage.clear();
   window.history.pushState(null,'','/?p=broken');
   const v=boot();
-  assert.equal(v.container.querySelector('.prog'),null);
-});
-
-test('악보: 진행이 마디(코드 차트)로 보인다',()=>{
-  const t=boot();
-  addFirst(t); t.click('root','0'); t.click('q','maj'); addFirst(t); t.click('root','7'); addFirst(t);
-  assert.equal(t.container.querySelector('.chart'),null);
-  t.click('pchart','');
-  assert.equal(t.container.querySelectorAll('.bars .bar').length,3,'한 마디에 1개면 3마디');
-  assert.deepEqual([...t.container.querySelectorAll('.bars .bc b')].map(x=>x.textContent),['Am','C','G']);
-  t.click('perbar','2');
-  assert.equal(t.container.querySelectorAll('.bars .bar').length,2,'한 마디에 2개면 2마디');
-  assert.equal(t.container.querySelectorAll('.bars .bar')[1].querySelectorAll('.bc').length,1,'마지막 마디는 1개');
-  t.click('pchart','');
-  assert.equal(t.container.querySelector('.chart'),null);
+  assert.deepEqual(barNames(v),['','','','']);
 });
