@@ -2,7 +2,7 @@
 // 진행 페이지: 진행 이름·목록, 마디 차트, 고른 칸 편집(코드·멜로디), 공유.
 // 진행을 만들고 고치는 일은 이 페이지에서만 한다.
 import {QUALITIES} from '../lib/fretlogic.js';
-import {MAX_LISTS,MAX_PROG,MAX_TITLE,MAX_NOTES,DIVS,barIsEmpty} from '../lib/settings.js';
+import {MAX_LISTS,MAX_PROG,MAX_TITLE,MAX_NOTES,MAX_CHORDS,barIsEmpty} from '../lib/settings.js';
 import {useGuide} from './GuideProvider.jsx';
 import {Chip} from './ui.jsx';
 import ChordFinder from './ChordFinder.jsx';
@@ -17,9 +17,9 @@ export default function ProgressionPage(){
   const posText=res=>res.baseFret===0?'개방':res.baseFret+'프렛';
   const hasAny=bars.some(b=>!barIsEmpty(b));
   const what=sel.kind==='c'
-    ?`${sel.bar+1}마디${selBar.div>1?` ${sel.i+1}/${selBar.div}번째 코드`:' 코드'}${selChord?` · ${g.chordName(selChord)}`:' · 비어 있음'}`
+    ?`${sel.bar+1}마디 코드${selChord?` ${sel.i+1}번째 · ${g.chordName(selChord)}`:` · 새 코드 더하기 (${selBar.chords.length}/${MAX_CHORDS})`}`
     :`${sel.bar+1}마디 멜로디${selNote?` · ${g.noteName(selNote)} (${g.noteWhere(selNote)})`:` · 새 음 더하기 (${selBar.notes.length}/${MAX_NOTES})`}`;
-  const canDel=sel.kind==='c'?!!selChord:!!selNote;
+  const canDel=sel.i>=0;
 
   return (
     <main className="stage">
@@ -36,18 +36,23 @@ export default function ProgressionPage(){
       <section className="chart" aria-label="마디 차트">
         <div className="bars">
           {bars.map((b,bi)=>(
-            <div key={bi} className={'bar d'+b.div+(sel.bar===bi?' picked':'')}>
+            <div key={bi} className={'bar'+(b.chords.length>=2?' wide':'')+(sel.bar===bi?' picked':'')}>
               <button type="button" className="bn" data-k="bar" data-v={String(bi)} aria-pressed={String(sel.bar===bi)} aria-label={`${bi+1}마디 선택`} onClick={()=>g.selectBar(bi)}>{bi+1}</button>
               <div className="slots">
                 {b.chords.map((c,i)=>{
                   const on=sel.bar===bi&&sel.kind==='c'&&sel.i===i;
                   return (
-                    <button key={i} type="button" className={'slot'+(on?' on':'')+(c?'':' blank')} data-k="slot" data-v={`${bi}.${i}`} aria-pressed={String(on)}
-                      aria-label={c?`${bi+1}마디 ${i+1}번째 코드 ${g.chordName(c)} 선택`:`${bi+1}마디 ${i+1}번째 코드 비어 있음, 선택`} onClick={()=>g.selectChord(bi,i)}>
-                      {c?<><b>{g.chordName(c)}</b><small>{posText(g.chordSlots.find(x=>x.bar===bi&&x.i===i).res)}</small></>:<em>＋</em>}
+                    <button key={i} type="button" className={'slot'+(on?' on':'')} data-k="slot" data-v={`${bi}.${i}`} aria-pressed={String(on)}
+                      aria-label={`${bi+1}마디 ${i+1}번째 코드 ${g.chordName(c)} 선택`} onClick={()=>g.selectChord(bi,i)}>
+                      <b>{g.chordName(c)}</b><small>{posText(g.chordSlots.find(x=>x.bar===bi&&x.i===i).res)}</small>
                     </button>
                   );
                 })}
+                {b.chords.length<MAX_CHORDS&&(()=>{
+                  const on=sel.bar===bi&&sel.kind==='c'&&sel.i<0;
+                  return <button type="button" className={'slot blank'+(on?' on':'')} data-k="cadd" data-v={String(bi)} aria-pressed={String(on)}
+                    aria-label={`${bi+1}마디에 코드 더하기 선택`} onClick={()=>g.selectChord(bi,-1)}><em>＋</em></button>;
+                })()}
               </div>
               <div className="mel" aria-label={`${bi+1}마디 멜로디`}>
                 {b.notes.map((x,i)=>{
@@ -65,9 +70,6 @@ export default function ProgressionPage(){
 
       <section className="seltool" aria-label="고른 칸">
         <span className="selname">{what}{filledSlots.length>1?` · 총 손 이동 ${g.moved}프렛`:''}</span>
-        <div className="seg compact" role="group" aria-label="마디의 코드 수">
-          {DIVS.map(d=><Chip key={d} k="div" v={String(d)} on={selBar.div===d} onPick={()=>g.setDiv(sel.bar,d)} aria-label={`${sel.bar+1}마디에 코드 ${d}개`}>코드 {d}</Chip>)}
-        </div>
         <div className="seg compact">
           <Chip k="del" v="" disabled={!canDel} onPick={g.delSel}>삭제</Chip>
           <Chip k="bclear" v="" disabled={barIsEmpty(selBar)} onPick={g.clearBar}>마디 비우기</Chip>
@@ -98,7 +100,7 @@ export default function ProgressionPage(){
               return (
                 <figure className="card" key={`${x.bar}.${x.i}`}>
                   <figcaption>
-                    <div className="who"><b>{x.bar+1}마디{bars[x.bar].div>1?` ${x.i+1}/${bars[x.bar].div}`:''} {name}</b><span>{x.res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
+                    <div className="who"><b>{x.bar+1}마디{bars[x.bar].chords.length>1?` ${x.i+1}/${bars[x.bar].chords.length}`:''} {name}</b><span>{x.res.bass}번 줄 베이스{d===null?null:<> · <span className="move">{moveText(d)}</span></>}</span></div>
                     <div className="capr"><div className="pos">{posText(x.res)}</div></div>
                   </figcaption>
                   <Diagram res={x.res} rootPc={x.c.root} quality={QUALITIES.find(y=>y.id===x.c.q)} label={label} names={nm} aria={ariaFor(x.res,name)}/>

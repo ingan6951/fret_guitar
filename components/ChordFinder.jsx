@@ -3,6 +3,7 @@
 // edit이면 진행에서 고른 코드 칸에 넣을 수 있다(카드의 +/↺, 앞뒤 코드와 가까운 순서, 기준 폼).
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,hasChord,rootsWithData,formsFor,fretsOf} from '../lib/fretlogic.js';
+import {MAX_CHORDS} from '../lib/settings.js';
 import {useGuide} from './GuideProvider.jsx';
 import {Chip} from './ui.jsx';
 import Diagram,{ariaFor} from './Diagram.jsx';
@@ -46,7 +47,7 @@ export default function ChordFinder({edit=false}){
     e.preventDefault(); slide(e.key==='ArrowLeft'?-1:1);
   };
 
-  const where=`${sel.bar+1}마디 ${g.selBar.div>1?`${sel.i+1}번째 `:''}`;
+  const where=`${sel.bar+1}마디 ${sel.i>=0?`${sel.i+1}번째 코드`:'끝'}`;
   const cards=shown.length?shown.map(({res},i)=>{
     const dPrev=before?gap(before,res):null,dNext=after?gap(res,after):null;
     const cur=curKey!==null&&keyOf(root,qid,fretsOf(res))===curKey;
@@ -59,15 +60,15 @@ export default function ChordFinder({edit=false}){
           <div className="capr">
             <div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div>
             {edit&&(selChord
-              ?<Chip k="frep" v={String(i)} className="plus" onPick={()=>g.putForm(res)} aria-label={`${where}을 이 폼으로 바꾸기`}>↺</Chip>
-              :<Chip k="fadd" v={String(i)} className="plus" onPick={()=>g.putForm(res)} aria-label={`${where}에 ${sym} 폼 넣기`}>+</Chip>)}
+              ?<Chip k="frep" v={String(i)} className="plus" onPick={()=>g.putForm(res)} aria-label={`${where}를 이 폼으로 바꾸기`}>↺</Chip>
+              :<Chip k="fadd" v={String(i)} className="plus" disabled={g.selBar.chords.length>=MAX_CHORDS} onPick={()=>g.putForm(res)} aria-label={`${where}에 ${sym} 폼 더하기`}>+</Chip>)}
           </div>
         </figcaption>
         <Diagram res={res} rootPc={root} quality={q} label={label} names={nm} aria={ariaFor(res,sym)}/>
       </figure>
     );
   }):<div className="empty"><p>이 코드의 폼 데이터가 아직 없어요.</p></div>;
-  const count=`폼 ${shown.length}개`+(edit?(selChord?` · ${where}을 앞뒤 폼과 가까운 순`:before||after?' · 앞뒤 폼에서 가까운 순':''):'');
+  const count=`폼 ${shown.length}개`+(edit?(selChord?` · ${where}를 앞뒤 폼과 가까운 순`:before||after?' · 앞뒤 폼에서 가까운 순':''):'');
 
   return (
     <section className="finder" aria-label="코드 폼">

@@ -114,40 +114,38 @@ console.log('모든 검사 통과');
   const C=(root,q,frets)=>({root,q,frets});
   const cm=C(0,'maj',[null,3,2,0,1,0]),am=C(9,'min',[5,7,7,5,5,5]),g=C(7,'maj',[3,2,0,0,0,3]);
   const bars=[
-    {div:1,chords:[cm],notes:[]},
+    {chords:[cm],notes:[]},
     S.newBar(),
-    {div:2,chords:[am,null],notes:[{s:0,f:3},{s:5,f:12}]},
-    {div:4,chords:[cm,am,null,g],notes:[]}
+    {chords:[am],notes:[{s:0,f:3},{s:5,f:12}]},
+    {chords:[cm,am,g],notes:[]}
   ];
   const text=S.encodeBars(bars);
-  A.equal(text,'0-maj-x.3.2.0.1.0~_~9-min-5.7.7.5.5.5,_|0.3,5.12~0-maj-x.3.2.0.1.0,9-min-5.7.7.5.5.5,_,7-maj-3.2.0.0.0.3');
-  A.deepEqual(S.decodeBars(text),bars,'링크 왕복(코드 1·2·4개, 빈 칸, 멜로디)');
+  A.equal(text,'0-maj-x.3.2.0.1.0~_~9-min-5.7.7.5.5.5|0.3,5.12~0-maj-x.3.2.0.1.0,9-min-5.7.7.5.5.5,7-maj-3.2.0.0.0.3');
+  A.deepEqual(S.decodeBars(text),bars,'링크 왕복(마디마다 코드 여러 개, 빈 마디, 멜로디)');
+  A.deepEqual(S.decodeBars(S.encodeBars([{chords:[],notes:[{s:1,f:3}]},cm&&{chords:[cm],notes:[]}])).slice(0,2),[{chords:[],notes:[{s:1,f:3}]},{chords:[cm],notes:[]}],'멜로디만 있는 마디');
   A.equal(S.decodeBars('0-maj-x.3.2.0.1.0').length,4,'마디가 4개 미만이면 빈 마디로 채운다');
   A.deepEqual(S.decodeBars('broken'),[],'잘못된 링크');
   A.deepEqual(S.decodeBars('_~_'),[],'아무것도 없으면 무시');
   A.deepEqual(S.decodeBars('0-nope-1.2.3.4.5.6'),[],'없는 코드 종류');
   A.deepEqual(S.decodeBars('0-maj-1.2.3'),[],'줄 수가 맞지 않음');
   A.equal(S.decodeBars(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8마디');
-  // 코드 칸이 3개 같은 잘못된 모양은 코드 1칸으로 본다
-  A.equal(S.decodeBars('0-maj-x.3.2.0.1.0,_,_').at(0).div,1);
+  A.equal(S.decodeBars(Array(7).fill('0-maj-x.3.2.0.1.0').join(','))[0].chords.length,S.MAX_CHORDS,'한 마디 코드는 최대 4개');
   // 범위를 벗어난 멜로디 음은 버리고, 멜로디는 최대 8개
   A.deepEqual(S.decodeBars('0-maj-x.3.2.0.1.0|6.0,0.99,0.3')[0].notes,[{s:0,f:3}]);
   A.equal(S.decodeBars('0-maj-x.3.2.0.1.0|'+Array(12).fill('0.3').join(','))[0].notes.length,S.MAX_NOTES);
-  // 예전 링크(마디마다 코드 하나, 지판음 마디 N줄.프렛)도 읽는다
-  const old=S.decodeBars('N0.3~0-maj-x.3.2.0.1.0');
-  A.deepEqual(old[0],{div:1,chords:[null],notes:[{s:0,f:3}]}); A.deepEqual(old[1],{div:1,chords:[cm],notes:[]});
-  // 저장값: 예전 형태(마디당 항목 하나, 진행 하나뿐인 prog)를 새 형태로 옮긴다
+  // 예전 링크(코드 칸 `_`, 지판음 마디 N줄.프렛)도 읽는다
+  const old=S.decodeBars('N0.3~0-maj-x.3.2.0.1.0~0-maj-x.3.2.0.1.0,_,_');
+  A.deepEqual(old[0],{chords:[],notes:[{s:0,f:3}]}); A.deepEqual(old[1],{chords:[cm],notes:[]}); A.deepEqual(old[2],{chords:[cm],notes:[]});
+  // 저장값: 예전 형태(마디당 항목 하나, 칸 수 div와 빈 칸 null, 진행 하나뿐인 prog)를 새 형태로 옮긴다
   const mig=S.sanitize({prog:[cm,{s:2,f:2},null]});
   A.equal(mig.lists[0].title,'진행 1'); A.equal(mig.lists[0].bars.length,4);
-  A.deepEqual(mig.lists[0].bars.slice(0,3),[{div:1,chords:[cm],notes:[]},{div:1,chords:[null],notes:[{s:2,f:2}]},S.newBar()]);
-  A.deepEqual(S.sanitize({lists:[{title:'a',prog:[cm]}]}).lists[0].bars[0],{div:1,chords:[cm],notes:[]});
+  A.deepEqual(mig.lists[0].bars.slice(0,3),[{chords:[cm],notes:[]},{chords:[],notes:[{s:2,f:2}]},S.newBar()]);
+  A.deepEqual(S.sanitize({lists:[{title:'a',prog:[cm]}]}).lists[0].bars[0],{chords:[cm],notes:[]});
+  A.deepEqual(S.sanitize({lists:[{title:'a',bars:[{div:4,chords:[cm,null,am,null],notes:[]}]}]}).lists[0].bars[0],{chords:[cm,am],notes:[]},'빈 칸은 빼고 이어 붙인다');
   const two=S.sanitize({lists:[{title:'a',bars:[]},{title:'b'.repeat(99),bars:Array(5).fill(S.newBar())}],cur:5});
   A.equal(two.lists.length,2); A.equal(two.cur,0,'범위 밖 cur는 0'); A.equal(two.lists[1].title.length,S.MAX_TITLE); A.equal(two.lists[1].bars.length,5);
   A.equal(S.sanitize({lists:[]}).lists.length,1,'빈 목록이면 진행 하나');
   A.equal(S.sanitize({lists:Array(30).fill({title:'x',bars:[]})}).lists.length,S.MAX_LISTS,'진행은 최대 20개');
-  // 칸 수(div)와 chords 길이가 어긋난 저장값은 바로잡는다
-  const fix=S.cleanBars([{div:2,chords:[cm],notes:[]},{div:3,chords:[cm,am,g,cm],notes:[]},{div:1,chords:[cm,am],notes:[]}]);
-  A.deepEqual(fix.slice(0,3).map(b=>[b.div,b.chords.length]),[[2,2],[4,4],[1,1]]);
   // 지판음 음 높이: 6번 줄 개방=E, 5번 줄 3프렛=C, 1번 줄 5프렛=A
   A.equal(L.pcOfNote(0,0),4); A.equal(L.pcOfNote(1,3),0); A.equal(L.pcOfNote(5,5),9);
   const v=L.noteVoicing(2,2); A.equal(v.bass,4); A.equal(v.baseFret,2); A.equal(v.notes.filter(Boolean).length,1);

@@ -2,7 +2,7 @@
 // 모든 페이지가 같이 쓰는 상태: 코드 조건, 진행 목록, 진행에서 고른 칸. 설정은 브라우저에 저장한다.
 import {createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,hasChord,voicingFromFrets,fretsOf,pcOfNote,handPos,moveCost} from '../lib/fretlogic.js';
-import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_NOTES,newBar,newList,cleanTitle,loadState,saveState,encodeBars,decodeBars,barIsEmpty} from '../lib/settings.js';
+import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_NOTES,MAX_CHORDS,newBar,newList,cleanTitle,loadState,saveState,encodeBars,decodeBars,barIsEmpty} from '../lib/settings.js';
 
 const Ctx=createContext(null);
 export const useGuide=()=>useContext(Ctx);
@@ -10,8 +10,9 @@ export const useGuide=()=>useContext(Ctx);
 const barsOf=s=>s.lists[s.cur].bars;
 const withBars=(s,fn)=>({...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,bars:fn(l.bars)}:l)});
 const editBar=(s,bi,fn)=>withBars(s,b=>b.map((x,j)=>j===bi?fn(x):x));
-// 고른 칸: bar 마디, kind 'c'(코드 칸 i) 또는 'n'(멜로디: i가 음 번호, -1이면 새 음 추가)
-const START={bar:0,kind:'c',i:0};
+// 고른 칸: bar 마디, kind 'c'(코드) 또는 'n'(멜로디). i는 코드/음 번호이고 -1이면 "새로 더하기"
+// (마디를 고르면 -1이라, 코드나 음을 고르는 대로 그 마디 끝에 계속 더해진다)
+const START={bar:0,kind:'c',i:-1};
 
 export default function GuideProvider({children}){
   const [state,setState]=useState(DEFAULT);
@@ -71,42 +72,52 @@ export default function GuideProvider({children}){
   // 고른 칸은 마디 수·칸 수가 줄어도 항상 있는 칸을 가리킨다
   const sel=useMemo(()=>{
     const bar=Math.min(selRaw.bar,bars.length-1),b=bars[bar];
-    if(selRaw.kind==='n') return {bar,kind:'n',i:Math.min(selRaw.i,b.notes.length-1)<0?-1:Math.min(selRaw.i,b.notes.length-1)};
-    return {bar,kind:'c',i:Math.max(0,Math.min(selRaw.i,b.div-1))};
+    const len=selRaw.kind==='n'?b.notes.length:b.chords.length;
+    return {bar,kind:selRaw.kind==='n'?'n':'c',i:selRaw.i>=0&&selRaw.i<len?selRaw.i:-1};
   },[selRaw,bars]);
   const selBar=bars[sel.bar];
-  const selChord=sel.kind==='c'?selBar.chords[sel.i]:null;
+  const selChord=sel.kind==='c'&&sel.i>=0?selBar.chords[sel.i]:null;
   const selNote=sel.kind==='n'&&sel.i>=0?selBar.notes[sel.i]:null;
 
   // 코드 칸을 마디 순서대로 한 줄로 펼친 목록: 앞뒤 폼 비교와 손 이동 계산에 쓴다
-  const chordSlots=useMemo(()=>bars.flatMap((b,bar)=>b.chords.map((c,i)=>({bar,i,c,res:c?voicingFromFrets(c.root,c.q,c.frets):null}))),[bars]);
-  const filledSlots=chordSlots.filter(x=>x.c);
+  const chordSlots=useMemo(()=>bars.flatMap((b,bar)=>b.chords.map((c,i)=>({bar,i,c,res:voicingFromFrets(c.root,c.q,c.frets)}))),[bars]);
+  const filledSlots=chordSlots;
   const gap=(a,b)=>Math.abs(handPos(a)-handPos(b));
   const moved=filledSlots.reduce((sum,x,k)=>k?sum+gap(filledSlots[k-1].res,x.res):0,0);
-  const at=chordSlots.findIndex(x=>x.bar===sel.bar&&x.i===sel.i&&sel.kind==='c');
-  const prev=at>=0?[...chordSlots.slice(0,at)].reverse().find(x=>x.c):undefined;
-  const next=at>=0?chordSlots.slice(at+1).find(x=>x.c):undefined;
+  // 코드를 넣을 자리의 앞뒤 코드: 고른 코드가 있으면 그 앞뒤, 새로 더하는 중이면 이 마디 끝의 앞뒤
+  let prev,next;
+  if(sel.kind==='c'){
+    const at=sel.i>=0?chordSlots.findIndex(x=>x.bar===sel.bar&&x.i===sel.i):-1;
+    if(at>=0){ prev=chordSlots[at-1]; next=chordSlots[at+1]; }
+    else{
+      const after=chordSlots.findIndex(x=>x.bar>sel.bar);
+      const cut=after<0?chordSlots.length:after;
+      prev=chordSlots[cut-1]; next=chordSlots[cut];
+    }
+  }
   const noteTotal=bars.reduce((t,b)=>t+b.notes.length,0);
 
   // ----- 진행 편집 -----
   const resetView=()=>{ setSel(START); setConfirmDel(false); };
-  const selectBar=bar=>setSel(s=>({bar,kind:s.kind,i:s.kind==='n'?-1:0}));
+  const selectBar=bar=>setSel(s=>({bar,kind:s.kind,i:-1}));
   const selectChord=(bar,i)=>{
     setSel({bar,kind:'c',i});
-    const c=bars[bar].chords[i];
+    const c=i>=0?bars[bar].chords[i]:null;
     if(c) setState(s=>({...s,root:c.root,q:c.q}));
   };
   const selectNote=(bar,i)=>setSel({bar,kind:'n',i});
-  const setKind=kind=>setSel(s=>({bar:s.bar,kind,i:kind==='n'?-1:0}));
-  const setDiv=(bar,div)=>setState(s=>editBar(s,bar,b=>({...b,div,chords:Array.from({length:div},(_,i)=>b.chords[i]||null)})));
-  const addBar=()=>{ setState(s=>barsOf(s).length>=MAX_PROG?s:withBars(s,b=>[...b,newBar()])); setSel(s=>({bar:bars.length,kind:s.kind,i:s.kind==='n'?-1:0})); };
-  const clearBar=()=>setState(s=>editBar(s,sel.bar,b=>({...b,chords:Array(b.div).fill(null),notes:[]})));
+  const setKind=kind=>setSel(s=>({bar:s.bar,kind,i:-1}));
+  const addBar=()=>{ if(bars.length>=MAX_PROG) return; setState(s=>barsOf(s).length>=MAX_PROG?s:withBars(s,b=>[...b,newBar()])); setSel(s=>({bar:bars.length,kind:s.kind,i:-1})); };
+  const clearBar=()=>{ setState(s=>editBar(s,sel.bar,()=>newBar())); setSel(s=>({...s,i:-1})); };
   const clearAll=()=>{ pick('pclear',''); setSel(START); };
-  // 고른 코드 칸에 폼을 넣는다(있으면 바꾼다). 같은 마디에 칸이 남아 있으면 다음 칸으로 가지만, 다음 마디로는 넘어가지 않는다.
+  // 코드: 코드를 고른 상태면 그 코드를 바꾸고, 아니면 고른 마디 끝에 더한다. 마디를 직접 고르기 전에는 계속 같은 마디에 더해진다.
   const putForm=res=>{
     if(sel.kind!=='c') return;
-    setState(s=>editBar(s,sel.bar,b=>({...b,chords:b.chords.map((c,i)=>i===sel.i?{root:s.root,q:s.q,frets:fretsOf(res)}:c)})));
-    setSel({bar:sel.bar,kind:'c',i:Math.min(sel.i+1,selBar.div-1)});
+    if(sel.i<0&&selBar.chords.length>=MAX_CHORDS) return;
+    setState(s=>editBar(s,sel.bar,b=>{
+      const c={root:s.root,q:s.q,frets:fretsOf(res)};
+      return {...b,chords:sel.i>=0?b.chords.map((x,i)=>i===sel.i?c:x):[...b.chords,c]};
+    }));
   };
   // 멜로디: 음을 고른 상태면 그 음을 바꾸고, 아니면 마디 끝에 더한다
   const putNote=(s,f)=>{
@@ -115,8 +126,10 @@ export default function GuideProvider({children}){
     setState(st=>editBar(st,sel.bar,b=>({...b,notes:sel.i>=0?b.notes.map((x,j)=>j===sel.i?{s,f}:x):[...b.notes,{s,f}]})));
   };
   const delSel=()=>{
-    if(sel.kind==='c') setState(s=>editBar(s,sel.bar,b=>({...b,chords:b.chords.map((c,i)=>i===sel.i?null:c)})));
-    else if(sel.i>=0){ setState(s=>editBar(s,sel.bar,b=>({...b,notes:b.notes.filter((_,j)=>j!==sel.i)}))); setSel({bar:sel.bar,kind:'n',i:-1}); }
+    if(sel.i<0) return;
+    const key=sel.kind==='c'?'chords':'notes';
+    setState(s=>editBar(s,sel.bar,b=>({...b,[key]:b[key].filter((_,j)=>j!==sel.i)})));
+    setSel({bar:sel.bar,kind:sel.kind,i:-1});
   };
   const switchList=v=>{ pick('pswitch',v); resetView(); };
   const newProg=()=>{ pick('pnew',''); resetView(); };
@@ -138,7 +151,7 @@ export default function GuideProvider({children}){
 
   const value={state,pick,root,qid,n,label,flat,lists,cur,bars,nm,q,sym:nm[root]+q.suffix,chordName,noteName,noteWhere,
     sel,selBar,selChord,selNote,chordSlots,filledSlots,moved,gap,prev,next,noteTotal,moveCost,
-    selectBar,selectChord,selectNote,setKind,setDiv,addBar,clearBar,clearAll,putForm,putNote,delSel,
+    selectBar,selectChord,selectNote,setKind,addBar,clearBar,clearAll,putForm,putNote,delSel,
     switchList,newProg,deleteProg,confirmDel,shareProg,shareNote,shareUrl};
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

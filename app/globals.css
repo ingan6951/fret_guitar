@@ -141,7 +141,6 @@ h1,h2,p{margin:0}
 .chart{display:grid;gap:8px}
 .bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .bar{position:relative;display:grid;gap:6px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
-.bar.d4{grid-column:1 / -1}
 .bar.picked{border-color:var(--ivory);box-shadow:0 0 0 1px var(--ivory)}
 .bn{width:30px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--steel);font-size:12px;font-weight:700;padding:0;text-align:left}
 .bar.picked .bn{color:var(--ivory)}
@@ -173,7 +172,6 @@ h1,h2,p{margin:0}
   .top h1{font-size:22px}
   .controls{max-width:640px}
   .bars{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .bar.d4{grid-column:span 2}
   .selname{flex:1 1 auto}
 }
 @media (prefers-reduced-motion:no-preference){
@@ -181,3 +179,5 @@ h1,h2,p{margin:0}
 }
 .editor>*,.notetable,.panel>*,.finder>*{min-width:0}
 .notetable{display:grid;gap:6px}
+.bar.wide{grid-column:1 / -1}
+@media (min-width:720px){ .bar.wide{grid-column:span 2} }
