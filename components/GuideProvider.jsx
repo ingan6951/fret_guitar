@@ -125,6 +125,14 @@ export default function GuideProvider({children}){
     if(sel.i<0&&selBar.notes.length>=MAX_NOTES) return;
     setState(st=>editBar(st,sel.bar,b=>({...b,notes:sel.i>=0?b.notes.map((x,j)=>j===sel.i?{s,f}:x):[...b.notes,{s,f}]})));
   };
+  // 멜로디 음 순서 바꾸기: 고른 음을 앞(-1)·뒤(+1)로 한 칸 옮긴다
+  const moveNote=dir=>{
+    if(sel.kind!=='n'||sel.i<0) return;
+    const j=sel.i+dir;
+    if(j<0||j>=selBar.notes.length) return;
+    setState(s=>editBar(s,sel.bar,b=>{ const n=b.notes.slice(); [n[sel.i],n[j]]=[n[j],n[sel.i]]; return {...b,notes:n}; }));
+    setSel({bar:sel.bar,kind:'n',i:j});
+  };
   const delSel=()=>{
     if(sel.i<0) return;
     const key=sel.kind==='c'?'chords':'notes';
@@ -151,7 +159,7 @@ export default function GuideProvider({children}){
 
   const value={state,pick,root,qid,n,label,flat,lists,cur,bars,nm,q,sym:nm[root]+q.suffix,chordName,noteName,noteWhere,
     sel,selBar,selChord,selNote,chordSlots,filledSlots,moved,gap,prev,next,noteTotal,moveCost,
-    selectBar,selectChord,selectNote,setKind,addBar,clearBar,clearAll,putForm,putNote,delSel,
+    selectBar,selectChord,selectNote,setKind,addBar,clearBar,clearAll,putForm,putNote,moveNote,delSel,
     switchList,newProg,deleteProg,confirmDel,shareProg,shareNote,shareUrl};
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

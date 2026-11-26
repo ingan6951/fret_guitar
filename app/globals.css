@@ -152,8 +152,6 @@ h1,h2,p{margin:0}
 .slot.blank{border-style:dashed}
 .slot.on{background:var(--ivory);border-color:var(--ivory);color:var(--ink)}
 .slot.on small,.slot.on em{color:#5b513c;opacity:1}
-.mel{display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:30px}
-.mel-empty{font-size:11px;color:var(--steel);opacity:.6;padding-left:2px}
 .mnote{min-width:34px;height:30px;padding:0 8px;border:1px solid var(--wound);border-radius:999px;background:transparent;font-size:13px;font-weight:700}
 .mnote.on{background:var(--brass);border-color:var(--brass);color:var(--ink)}
 .addbar{width:100%}
@@ -181,3 +179,39 @@ h1,h2,p{margin:0}
 .notetable{display:grid;gap:6px}
 .bar.wide{grid-column:1 / -1}
 @media (min-width:720px){ .bar.wide{grid-column:span 2} }
+
+/* 마디 안 행 이름표(코드 / ♪ 멜로디)와 멜로디 순서 번호 */
+.brow{display:flex;align-items:center;gap:6px;min-width:0}
+.brow>.slots,.brow>.notes{flex:1 1 auto;min-width:0}
+.rowtag{flex:0 0 auto;min-width:34px;font-size:10.5px;font-weight:700;color:var(--steel);letter-spacing:-.01em}
+.rowtag.note{color:var(--brass)}
+.brow.mel{border-top:1px dashed var(--line);padding-top:5px;margin-top:2px}
+.notes{display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:30px}
+.mnote{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:0 9px 0 4px}
+.mnote i,.pnote i{font-style:normal;display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:50%;background:var(--brass);color:var(--ink);font-size:11px;font-weight:800}
+.mnote.on i{background:var(--ink);color:var(--brass)}
+.ord{font-size:9px;color:var(--brass);margin-left:1px}
+.ncell.on .ord{color:var(--ink)}
+.viewseg{margin-left:auto}
+.mel-empty{font-size:11px;color:var(--steel);opacity:.6}
+
+/* 연주용 보기: 크게, 한눈에 */
+.play{display:grid;gap:10px}
+.playbars{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.playbar{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;gap:8px;min-width:0}
+.playbar.none{opacity:.55}
+.playbar h3{margin:0;font-size:13px;color:var(--steel);font-weight:700}
+.playbar h3 span{font-family:var(--display);font-weight:800;font-size:24px;color:var(--ivory);margin-right:3px}
+.prow2{display:flex;gap:8px;align-items:flex-start;min-width:0}
+.prow2>.rowtag{padding-top:6px}
+.pchords{flex:1;display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:2px;min-width:0}
+.pchord{flex:0 0 min(78%,250px);margin:0;background:var(--ebony);border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;display:grid;gap:4px;scroll-snap-align:start}
+.pchord figcaption{display:flex;justify-content:space-between;align-items:center}
+.pchord figcaption b{font-size:22px}
+.pchord svg{display:block;width:100%;height:auto}
+.pnotes{flex:1;list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.pnote{display:grid;grid-template-columns:auto auto;align-items:center;gap:0 8px;padding:6px 12px 6px 8px;background:var(--ebony);border:1px solid var(--wound);border-radius:12px}
+.pnote i{grid-row:span 2;min-width:26px;height:26px;font-size:14px}
+.pnote b{font-size:22px;line-height:1}
+.pnote small{font-size:11.5px;color:var(--steel)}
+@media (min-width:720px){ .playbars{grid-template-columns:repeat(2,minmax(0,1fr))} .pchord{flex-basis:210px} }
