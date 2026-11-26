@@ -108,42 +108,49 @@ console.log('모든 검사 통과');
   console.log('음 개수 검사 통과');
 }
 
-// 진행 공유 링크 변환 (마디 4~8개, 빈 마디는 null)
+// 진행 데이터: 마디 { div, chords, notes }, 공유 링크 변환, 저장값 정리
 {
   const S=await import('../lib/settings.js');
-  const prog=[{root:0,q:'maj',frets:[null,3,2,0,1,0]},null,{root:9,q:'min',frets:[5,7,7,5,5,5]},null];
-  A.deepEqual(S.decodeProg(S.encodeProg(prog)),prog,'링크 왕복(빈 마디 포함)');
-  const five=[...prog,{root:7,q:'maj',frets:[3,2,0,0,0,3]}];
-  A.deepEqual(S.decodeProg(S.encodeProg(five)),five,'5마디 왕복');
-  A.deepEqual(S.decodeProg('0-maj-x.3.2.0.1.0').length,4,'마디가 4개 미만이면 빈 마디로 채운다');
-  A.deepEqual(S.decodeProg('broken'),[],'잘못된 링크');
-  A.deepEqual(S.decodeProg('_~_'),[],'코드가 하나도 없으면 무시');
-  A.deepEqual(S.decodeProg('0-nope-1.2.3.4.5.6'),[],'없는 코드 종류');
-  A.deepEqual(S.decodeProg('0-maj-1.2.3'),[],'줄 수가 맞지 않음');
-  A.equal(S.decodeProg(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8마디');
-  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).lists[0].prog.length,4,'예전 저장값이 짧아도 4마디');
-  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).lists[0].title,'진행 1','예전 저장값은 첫 진행으로');
-  const two=S.sanitize({lists:[{title:'a',prog:[]},{title:'b'.repeat(99),prog:[null,null,null,null,null]}],cur:5});
-  A.equal(two.lists.length,2,'진행 목록'); A.equal(two.cur,0,'범위 밖 cur는 0'); A.equal(two.lists[1].title.length,S.MAX_TITLE,'제목 길이 제한'); A.equal(two.lists[1].prog.length,5,'마디 수 유지');
+  const C=(root,q,frets)=>({root,q,frets});
+  const cm=C(0,'maj',[null,3,2,0,1,0]),am=C(9,'min',[5,7,7,5,5,5]),g=C(7,'maj',[3,2,0,0,0,3]);
+  const bars=[
+    {div:1,chords:[cm],notes:[]},
+    S.newBar(),
+    {div:2,chords:[am,null],notes:[{s:0,f:3},{s:5,f:12}]},
+    {div:4,chords:[cm,am,null,g],notes:[]}
+  ];
+  const text=S.encodeBars(bars);
+  A.equal(text,'0-maj-x.3.2.0.1.0~_~9-min-5.7.7.5.5.5,_|0.3,5.12~0-maj-x.3.2.0.1.0,9-min-5.7.7.5.5.5,_,7-maj-3.2.0.0.0.3');
+  A.deepEqual(S.decodeBars(text),bars,'링크 왕복(코드 1·2·4개, 빈 칸, 멜로디)');
+  A.equal(S.decodeBars('0-maj-x.3.2.0.1.0').length,4,'마디가 4개 미만이면 빈 마디로 채운다');
+  A.deepEqual(S.decodeBars('broken'),[],'잘못된 링크');
+  A.deepEqual(S.decodeBars('_~_'),[],'아무것도 없으면 무시');
+  A.deepEqual(S.decodeBars('0-nope-1.2.3.4.5.6'),[],'없는 코드 종류');
+  A.deepEqual(S.decodeBars('0-maj-1.2.3'),[],'줄 수가 맞지 않음');
+  A.equal(S.decodeBars(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8마디');
+  // 코드 칸이 3개 같은 잘못된 모양은 코드 1칸으로 본다
+  A.equal(S.decodeBars('0-maj-x.3.2.0.1.0,_,_').at(0).div,1);
+  // 범위를 벗어난 멜로디 음은 버리고, 멜로디는 최대 8개
+  A.deepEqual(S.decodeBars('0-maj-x.3.2.0.1.0|6.0,0.99,0.3')[0].notes,[{s:0,f:3}]);
+  A.equal(S.decodeBars('0-maj-x.3.2.0.1.0|'+Array(12).fill('0.3').join(','))[0].notes.length,S.MAX_NOTES);
+  // 예전 링크(마디마다 코드 하나, 지판음 마디 N줄.프렛)도 읽는다
+  const old=S.decodeBars('N0.3~0-maj-x.3.2.0.1.0');
+  A.deepEqual(old[0],{div:1,chords:[null],notes:[{s:0,f:3}]}); A.deepEqual(old[1],{div:1,chords:[cm],notes:[]});
+  // 저장값: 예전 형태(마디당 항목 하나, 진행 하나뿐인 prog)를 새 형태로 옮긴다
+  const mig=S.sanitize({prog:[cm,{s:2,f:2},null]});
+  A.equal(mig.lists[0].title,'진행 1'); A.equal(mig.lists[0].bars.length,4);
+  A.deepEqual(mig.lists[0].bars.slice(0,3),[{div:1,chords:[cm],notes:[]},{div:1,chords:[null],notes:[{s:2,f:2}]},S.newBar()]);
+  A.deepEqual(S.sanitize({lists:[{title:'a',prog:[cm]}]}).lists[0].bars[0],{div:1,chords:[cm],notes:[]});
+  const two=S.sanitize({lists:[{title:'a',bars:[]},{title:'b'.repeat(99),bars:Array(5).fill(S.newBar())}],cur:5});
+  A.equal(two.lists.length,2); A.equal(two.cur,0,'범위 밖 cur는 0'); A.equal(two.lists[1].title.length,S.MAX_TITLE); A.equal(two.lists[1].bars.length,5);
   A.equal(S.sanitize({lists:[]}).lists.length,1,'빈 목록이면 진행 하나');
-  A.equal(S.sanitize({lists:Array(30).fill({title:'x',prog:[]})}).lists.length,S.MAX_LISTS,'진행은 최대 20개');
-  console.log('링크 변환 검사 통과');
-}
-
-import * as S from '../lib/settings.js';
-{
-  const {test}=await import('node:test');
-  test('지판음: 항목 {s,f} 검증, 링크 변환, 저장값 정리',()=>{
-    const prog=[{root:9,q:'min',frets:[null,0,2,2,1,0]},{s:0,f:0},{s:5,f:12},null];
-    const text=S.encodeProg(prog);
-    A.equal(text,'9-min-x.0.2.2.1.0~N0.0~N5.12~_');
-    A.deepEqual(S.decodeProg(text),prog);
-    // 범위를 벗어나거나 모양이 틀린 지판음은 빈 마디
-    A.deepEqual(S.cleanProg([{s:6,f:0},{s:0,f:99},{s:-1,f:1},{s:1.5,f:1},{s:2}]).slice(0,5),[null,null,null,null,null]);
-    A.deepEqual(S.decodeProg('N6.0~N0.x~N0.3'),[null,null,{s:0,f:3},null]);
-    // 음 높이: 6번 줄 개방=E, 5번 줄 3프렛=C, 1번 줄 5프렛=A
-    A.equal(L.pcOfNote(0,0),4); A.equal(L.pcOfNote(1,3),0); A.equal(L.pcOfNote(5,5),9);
-    const v=L.noteVoicing(2,2); A.equal(v.bass,4); A.equal(v.baseFret,2); A.equal(v.notes.filter(Boolean).length,1);
-    A.equal(L.isNote({s:0,f:1}),true); A.equal(L.isNote({root:0,q:'maj',frets:[0,0,0,0,0,0]}),false);
-  });
+  A.equal(S.sanitize({lists:Array(30).fill({title:'x',bars:[]})}).lists.length,S.MAX_LISTS,'진행은 최대 20개');
+  // 칸 수(div)와 chords 길이가 어긋난 저장값은 바로잡는다
+  const fix=S.cleanBars([{div:2,chords:[cm],notes:[]},{div:3,chords:[cm,am,g,cm],notes:[]},{div:1,chords:[cm,am],notes:[]}]);
+  A.deepEqual(fix.slice(0,3).map(b=>[b.div,b.chords.length]),[[2,2],[4,4],[1,1]]);
+  // 지판음 음 높이: 6번 줄 개방=E, 5번 줄 3프렛=C, 1번 줄 5프렛=A
+  A.equal(L.pcOfNote(0,0),4); A.equal(L.pcOfNote(1,3),0); A.equal(L.pcOfNote(5,5),9);
+  const v=L.noteVoicing(2,2); A.equal(v.bass,4); A.equal(v.baseFret,2); A.equal(v.notes.filter(Boolean).length,1);
+  A.equal(L.isNote({s:0,f:1}),true); A.equal(L.isNote(cm),false);
+  console.log('진행 데이터·링크 검사 통과');
 }

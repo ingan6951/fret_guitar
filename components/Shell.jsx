@@ -1,11 +1,11 @@
 'use client';
-// 모든 페이지 공통 머리말: 제목, 페이지 이동 탭, 표시 설정
+// 모든 페이지 공통 머리말: 제목, 페이지 이동 탭, 표시 설정 (한 줄)
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useGuide} from './GuideProvider.jsx';
-import {Chip} from './ProgBar.jsx';
+import {Chip} from './ui.jsx';
 
-const PAGES=[['/','코드 폼'],['/notes','지판음'],['/progression','진행']];
+const PAGES=[['/','코드·지판'],['/progression','진행']];
 const LABELS=[['note','음이름'],['degree','도수']];
 
 export default function Shell({children}){
@@ -21,7 +21,7 @@ export default function Shell({children}){
           ))}
         </nav>
         <details className="set">
-          <summary aria-label="보기">⚙ 보기</summary>
+          <summary aria-label="보기 설정">⚙</summary>
           <div className="setbody">
             <div className="seg compact" role="group" aria-label="표시 방식">
               {LABELS.map(([v,l])=><Chip key={v} k="label" v={v} on={g.label===v} onPick={g.pick}>{l}</Chip>)}
