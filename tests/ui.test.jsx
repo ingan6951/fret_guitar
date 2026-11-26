@@ -8,6 +8,9 @@ import GuideProvider from '../components/GuideProvider.jsx';
 import Shell from '../components/Shell.jsx';
 import ExplorePage from '../components/ExplorePage.jsx';
 import ProgressionPage from '../components/ProgressionPage.jsx';
+import RoomPage from '../components/RoomPage.jsx';
+import {makeChannel,resetBus,bus} from './shims/supabase.js';
+import {epochNow} from '../lib/sync.js';
 import {CHORDS} from '../lib/chords.js';
 import {NOTE_SHARP,QUALITIES} from '../lib/fretlogic.js';
 import {STORAGE_KEY} from '../lib/settings.js';
@@ -15,7 +18,7 @@ import {STORAGE_KEY} from '../lib/settings.js';
 afterEach(()=>{ cleanup(); localStorage.clear(); });
 
 // 두 페이지를 한 상태 위에서 오가는 틀: 실제 앱처럼 상태(고른 칸 등)가 페이지를 옮겨도 유지된다
-const PAGES={explore:ExplorePage,prog:ProgressionPage};
+const PAGES={explore:ExplorePage,prog:ProgressionPage,room:RoomPage};
 let setPage;
 function App(){ const [p,sp]=useState('explore'); setPage=sp; const P=PAGES[p]; return <GuideProvider><Shell><P/></Shell></GuideProvider>; }
 function boot(saved,page='explore'){
@@ -482,4 +485,214 @@ test('예전 저장값(마디마다 항목 하나)은 새 마디 형태로 옮�
   assert.equal(b.state().cur,1);
   assert.deepEqual(chordNames(b)[0],['G']);
   assert.equal(window.location.search,'');
+});
+
+// ----- 곡 빠르기·박자와 메트로놈 -----
+// jsdom에는 Web Audio가 없어서, 실제 시간을 따라가는 가짜 오디오 시계를 쓴다
+class FakeAudio{
+  constructor(){ this.t0=performance.now(); this.state='running'; this.destination={}; FakeAudio.clicks=0; }
+  get currentTime(){ return (performance.now()-this.t0)/1000; }
+  createOscillator(){ return {frequency:{},connect(){},start(){ FakeAudio.clicks++; },stop(){}}; }
+  createGain(){ return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}}; }
+  close(){}
+}
+const wait=ms=>act(async()=>{ await new Promise(r=>setTimeout(r,ms)); });
+
+test('곡 빠르기·박자: −/+·직접 입력·박자 고르기가 곡마다 저장되고, 새 곡은 기본값이다',()=>{
+  const t=boot(null,'prog');
+  const bpmIn=()=>t.container.querySelector('input[data-k="bpm"]');
+  assert.equal(bpmIn().value,'90');
+  t.click('bpmstep','1'); t.click('bpmstep','1');
+  assert.equal(t.state().lists[0].bpm,92);
+  fireEvent.change(bpmIn(),{target:{value:'128'}});
+  assert.equal(t.state().lists[0].bpm,128);
+  fireEvent.change(bpmIn(),{target:{value:'5'}}); fireEvent.blur(bpmIn()); // 범위 밖은 최소값으로
+  assert.equal(t.state().lists[0].bpm,30); assert.equal(bpmIn().value,'30');
+  t.click('beats','3');
+  assert.equal(t.state().lists[0].beats,3);
+  assert.equal(t.container.querySelectorAll('.beatdots i').length,3);
+  t.click('pnew','');
+  assert.equal(bpmIn().value,'90','새 곡은 기본 빠르기');
+  assert.equal(t.state().lists[1].beats,4);
+  t.click('pswitch','0');
+  assert.equal(bpmIn().value,'30','곡을 바꾸면 그 곡의 빠르기');
+});
+
+test('메트로놈: 재생하면 박이 돌고 연주 중인 마디가 강조되며, 정지하면 멈춘다',async()=>{
+  window.AudioContext=FakeAudio;
+  try{
+    const t=boot(null,'prog');
+    addFirst(t); t.click('bar','1'); addFirst(t);           // 1·2마디에 코드 → 곡 길이 2마디
+    fireEvent.change(t.container.querySelector('input[data-k="bpm"]'),{target:{value:'240'}}); // 한 박 0.25초
+    t.click('beats','2');                                     // 한 마디 0.5초
+    t.click('view','play');
+    t.click('mplay','');
+    assert.equal(t.btn('mplay','').getAttribute('aria-pressed'),'true');
+    await wait(400);
+    assert.ok(FakeAudio.clicks>=2,'클릭 소리를 예약한다');
+    assert.equal(t.container.querySelectorAll('.beatdots i.on').length,1,'지금 박 하나가 켜진다');
+    assert.equal(t.container.querySelectorAll('.playbar.now').length,1);
+    await wait(1100);                                         // 두 마디를 넘기면 처음 마디로 돌아온다
+    const seen=t.container.querySelector('.playbar.now');
+    assert.ok(seen,'계속 한 마디가 강조된다');
+    assert.ok(['1마디','2마디'].includes(seen.getAttribute('aria-label')),'빈 3·4마디로는 가지 않는다');
+    t.click('mplay','');
+    assert.equal(t.btn('mplay','').getAttribute('aria-pressed'),'false');
+    const n=FakeAudio.clicks; await wait(300);
+    assert.equal(FakeAudio.clicks,n,'정지하면 더 예약하지 않는다');
+    assert.equal(t.container.querySelector('.playbar.now'),null);
+  }finally{ delete window.AudioContext; }
+});
+
+test('Web Audio가 없는 브라우저: 메트로놈 버튼이 꺼지고 안내가 나온다',()=>{
+  const t=boot(null,'prog');
+  assert.equal(t.btn('mplay','').disabled,true);
+  assert.match(t.container.querySelector('.tempo').textContent,/소리를 낼 수 없어요/);
+});
+
+test('곡 공유 링크에 빠르기·박자가 담기고, 받은 쪽에서 같은 빠르기로 열린다',async()=>{
+  let copied='';
+  Object.defineProperty(navigator,'clipboard',{value:{writeText:async x=>{ copied=x; }},configurable:true});
+  const t=boot(null,'prog');
+  addFirst(t);
+  fireEvent.change(t.container.querySelector('input[data-k="bpm"]'),{target:{value:'132'}});
+  t.click('beats','3');
+  await act(async()=>{ fireEvent.click(t.container.querySelector('button[data-k="pshare"]')); });
+  const url=new URL(copied);
+  assert.equal(url.searchParams.get('bpm'),'132'); assert.equal(url.searchParams.get('ts'),'3');
+  cleanup(); localStorage.clear();
+  window.history.pushState(null,'','/progression/'+url.search);
+  const u=boot(null,'prog');
+  assert.equal(u.state().lists[0].bpm,132); assert.equal(u.state().lists[0].beats,3);
+  assert.equal(u.container.querySelector('input[data-k="bpm"]').value,'132');
+  assert.equal(window.location.search,'','빠르기 값도 주소에서 지운다');
+  // 빠르기가 없는 예전 링크는 기본 빠르기
+  cleanup(); localStorage.clear();
+  window.history.pushState(null,'','/progression/?p='+url.searchParams.get('p'));
+  const v=boot(null,'prog');
+  assert.equal(v.state().lists[0].bpm,90);
+});
+
+// ----- 합주 방 (Supabase 대신 tests/shims/supabase.js 의 버스) -----
+const ROOM_ENV={NEXT_PUBLIC_SUPABASE_URL:'https://example.supabase.co',NEXT_PUBLIC_SUPABASE_ANON_KEY:'sb_publishable_test'};
+const withRoom=async(fn)=>{
+  Object.assign(process.env,ROOM_ENV); window.AudioContext=FakeAudio; FakeAudio.clicks=0; resetBus();
+  try{ await fn(); }finally{
+    for(const k of Object.keys(ROOM_ENV)) delete process.env[k];
+    delete window.AudioContext; resetBus(); window.history.pushState(null,'','/');
+  }
+};
+const openRoomAt=async(id)=>{ window.history.pushState(null,'','/room/?id='+id); const t=boot(null,'room'); await wait(30); return t; };
+const sentBy=(event,from)=>bus.sent.filter(m=>m.event===event&&(!from||m.from===from));
+
+test('합주 방: 서버 설정이 없거나 방 링크가 잘못되면 안내만 보인다',async()=>{
+  window.history.pushState(null,'','/room/?id=abcdefgh');
+  let t=boot(null,'room'); await wait(10);
+  assert.match(t.container.textContent,/서버 설정\(Supabase\)이 없어/);
+  cleanup();
+  await withRoom(async()=>{
+    window.history.pushState(null,'','/room/?id=../../x');
+    t=boot(null,'room'); await wait(10);
+    assert.match(t.container.textContent,/방 링크가 올바르지 않아요/);
+  });
+  // 설정이 없으면 진행 페이지에 방 만들기 버튼도 없다
+  cleanup(); window.history.pushState(null,'','/progression/');
+  const p=boot(null,'prog');
+  assert.equal(p.container.querySelector('[data-k="room"]'),null);
+});
+
+test('합주 방 참여자: 방장 시계에 맞춰, 소리를 켠 뒤 방장이 재생하면 울리고 정지하면 멈춘다',async()=>{
+  await withRoom(async()=>{
+    const AHEAD=5000; // 방장 기기 시계가 5초 빠르다
+    const h=makeChannel('fretguide-room-guestroom1',{config:{presence:{key:'H'}}});
+    let grid={playing:false};
+    const sendState=()=>h.send({type:'broadcast',event:'state',payload:{v:epochNow()+AHEAD,song:{t:'가을 노래',bpm:240,ts:2},grid}});
+    h.on('broadcast',{event:'hello'},sendState);
+    h.on('broadcast',{event:'ping'},({payload:p})=>h.send({type:'broadcast',event:'pong',payload:{to:p.from,n:p.n,t0:p.t0,th:epochNow()+AHEAD}}));
+    h.subscribe(); h.track({me:'H',role:'host'});
+
+    const t=await openRoomAt('guestroom1');
+    assert.equal(t.container.querySelector('.badge').textContent,'참여자');
+    assert.match(t.container.querySelector('[data-k="song"]').textContent,/가을 노래.*240 BPM · 2\/4/);
+    await wait(1400); // 핑 8번
+    assert.match(t.container.querySelector('[data-k="clock"]').textContent,/시계 맞춤 ±\d+ms/);
+
+    // 소리를 켜기 전에는 방장이 재생해도 울리지 않는다
+    grid={playing:true,anchor:epochNow()+AHEAD+300,index:0,bpm:240,beats:2}; sendState();
+    await wait(600);
+    assert.equal(FakeAudio.clicks||0,0);
+    // 소리를 켜면 이미 진행 중인 박자 격자에 맞춰 바로 울린다 (시계 차이 5초를 반영하지 않으면 5초 동안 조용하다)
+    fireEvent.click(t.container.querySelector('button[data-k="gjoin"]'));
+    await wait(500);
+    assert.ok(FakeAudio.clicks>=1,'방장 격자에 맞춰 클릭');
+    assert.match(t.container.querySelector('.gstate').textContent,/재생 중/);
+    assert.equal(t.container.querySelectorAll('.guest .beatdots i').length,2);
+    // 방장 정지
+    grid={playing:false}; sendState(); await wait(50);
+    const n=FakeAudio.clicks; await wait(400);
+    assert.equal(FakeAudio.clicks,n,'정지 후에는 더 울리지 않는다');
+    assert.match(t.container.querySelector('.gstate').textContent,/방장이 재생하면/);
+    // 늦게 도착한 옛 상태(재생 중)는 무시한다
+    h.send({type:'broadcast',event:'state',payload:{v:1,song:{t:'옛',bpm:60,ts:4},grid:{playing:true,anchor:0,index:0,bpm:60,beats:4}}});
+    await wait(300);
+    assert.equal(FakeAudio.clicks,n);
+    h._leave();
+  });
+});
+
+test('합주 방 방장: 상태·시계 응답을 보내고, 재생·빠르기 변경·정지를 알린다',async()=>{
+  await withRoom(async()=>{
+    localStorage.setItem('fretguide.rooms',JSON.stringify(['hostroom1']));
+    const got=[];
+    const q=makeChannel('fretguide-room-hostroom1',{config:{presence:{key:'G'}}});
+    q.on('broadcast',{event:'state'},({payload})=>got.push(payload));
+    const pongs=[]; q.on('broadcast',{event:'pong'},({payload})=>pongs.push(payload));
+    q.subscribe(); q.track({me:'G',role:'guest'});
+
+    const t=await openRoomAt('hostroom1');
+    assert.equal(t.container.querySelector('.badge').textContent,'방장');
+    await wait(30);
+    q.send({type:'broadcast',event:'hello',payload:{from:'G'}});
+    q.send({type:'broadcast',event:'ping',payload:{from:'G',n:0,t0:123}});
+    await wait(30);
+    const last=()=>got[got.length-1];
+    assert.deepEqual(last().song,{t:'진행 1',bpm:90,ts:4});
+    assert.equal(last().grid.playing,false);
+    assert.equal(pongs.length,1); assert.equal(pongs[0].to,'G'); assert.equal(pongs[0].t0,123);
+    assert.ok(Math.abs(pongs[0].th-epochNow())<200,'방장 시계로 답한다');
+    assert.match(t.container.querySelector('.conn').textContent,/접속 2명/);
+
+    // 재생: 1.5초 뒤 0번째 박
+    t.click('mplay',''); await wait(20);
+    const g1=last().grid;
+    assert.equal(g1.playing,true); assert.equal(g1.index,0); assert.equal(g1.bpm,90);
+    assert.ok(Math.abs(g1.anchor-(epochNow()+1500))<150,'시작 시각은 약 1.5초 뒤');
+    // 재생 중 빠르기 변경: 같은 격자의 뒤쪽 박부터 새 빠르기
+    t.click('bpmstep','1'); await wait(20);
+    const g2=last().grid;
+    assert.equal(g2.bpm,91); assert.equal(last().song.bpm,91);
+    assert.ok(g2.anchor>=g1.anchor,'앞당기지 않는다');
+    assert.ok(Math.abs(((g2.anchor-g1.anchor)/(60000/90))-g2.index)<1e-6,'원래 격자의 박 위');
+    // 정지
+    t.click('mplay',''); await wait(20);
+    assert.equal(last().grid.playing,false);
+    // 이 기기 이어폰 지연 보정은 기기에 저장된다
+    fireEvent.change(t.container.querySelector('input[data-k="lead"]'),{target:{value:'180'}});
+    assert.equal(localStorage.getItem('fretguide.lead'),'180');
+    assert.match(t.container.querySelector('.calib summary').textContent,/180ms/);
+    q._leave();
+  });
+});
+
+test('진행 페이지의 합주 방 만들기: 이 기기를 방장으로 기억하고 방으로 간다',async()=>{
+  await withRoom(async()=>{
+    window.history.pushState(null,'','/progression/');
+    const t=boot(null,'prog'); await wait(10);
+    const a=t.container.querySelector('a[data-k="room"]');
+    const m=/^\/room\/\?id=([a-z0-9]{10})$/.exec(a.getAttribute('href'));
+    assert.ok(m,`방 주소 ${a.getAttribute('href')}`);
+    a.addEventListener('click',e=>e.preventDefault()); // jsdom은 페이지 이동을 하지 않는다
+    fireEvent.click(a);
+    assert.deepEqual(JSON.parse(localStorage.getItem('fretguide.rooms')),[m[1]]);
+  });
 });

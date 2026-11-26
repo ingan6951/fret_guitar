@@ -2,7 +2,7 @@
 // 모든 페이지가 같이 쓰는 상태: 코드 조건, 진행 목록, 진행에서 고른 칸. 설정은 브라우저에 저장한다.
 import {createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,hasChord,voicingFromFrets,fretsOf,pcOfNote,handPos,moveCost} from '../lib/fretlogic.js';
-import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_NOTES,MAX_CHORDS,newBar,newList,cleanTitle,loadState,saveState,encodeBars,decodeBars,barIsEmpty} from '../lib/settings.js';
+import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_NOTES,MAX_CHORDS,newBar,newList,cleanTitle,cleanBpm,cleanBeats,loadState,saveState,encodeBars,decodeBars,barIsEmpty} from '../lib/settings.js';
 
 const Ctx=createContext(null);
 export const useGuide=()=>useContext(Ctx);
@@ -31,8 +31,8 @@ export default function GuideProvider({children}){
         const base=s||DEFAULT,title=cleanTitle(url.searchParams.get('t'))||'공유받은 진행';
         const onlyEmpty=base.lists.length===1&&base.lists[0].bars.every(barIsEmpty);
         const lists=onlyEmpty?[]:base.lists.length>=MAX_LISTS?base.lists.slice(0,MAX_LISTS-1):base.lists;
-        s={...base,lists:[...lists,{title,bars:shared}],cur:lists.length};
-        url.searchParams.delete('p'); url.searchParams.delete('t');
+        s={...base,lists:[...lists,{title,bars:shared,bpm:cleanBpm(url.searchParams.get('bpm')),beats:cleanBeats(url.searchParams.get('ts'))}],cur:lists.length};
+        for(const k of ['p','t','bpm','ts']) url.searchParams.delete(k);
         window.history.replaceState(null,'',url.pathname+url.search+url.hash);
       }
     }catch(e){}
@@ -51,6 +51,8 @@ export default function GuideProvider({children}){
       case 'acc': return {...s,flat:v==='flat'};
       case 'pclear': return withBars(s,()=>Array.from({length:MIN_BARS},()=>newBar()));
       case 'ptitle': return {...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,title:cleanTitle(v)}:l)};
+      case 'pbpm': return {...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,bpm:cleanBpm(v)}:l)};
+      case 'pbeats': return {...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,beats:cleanBeats(v)}:l)};
       case 'pswitch': { const i=Number(v); return i>=0&&i<s.lists.length?{...s,cur:i}:s; }
       case 'pnew': return s.lists.length>=MAX_LISTS?s:{...s,lists:[...s.lists,newList(`진행 ${s.lists.length+1}`)],cur:s.lists.length};
       case 'plistdel': {
@@ -150,6 +152,8 @@ export default function GuideProvider({children}){
       const url=new URL(window.location.href); url.pathname='/progression/'; url.search=''; url.hash='';
       url.searchParams.set('p',encodeBars(bars));
       if(lists[cur].title) url.searchParams.set('t',lists[cur].title);
+      url.searchParams.set('bpm',String(lists[cur].bpm));
+      url.searchParams.set('ts',String(lists[cur].beats));
       const text=url.toString();
       try{ await navigator.clipboard.writeText(text); setShareUrl(''); setShareNote('복사됨'); }
       catch(e){ setShareUrl(text); setShareNote('아래 주소를 복사하세요'); }
@@ -157,7 +161,8 @@ export default function GuideProvider({children}){
     }catch(e){ setShareNote(''); }
   };
 
-  const value={state,pick,root,qid,n,label,flat,lists,cur,bars,nm,q,sym:nm[root]+q.suffix,chordName,noteName,noteWhere,
+  const {bpm,beats}=lists[cur];
+  const value={state,pick,root,qid,n,label,flat,lists,cur,bars,bpm,beats,nm,q,sym:nm[root]+q.suffix,chordName,noteName,noteWhere,
     sel,selBar,selChord,selNote,chordSlots,filledSlots,moved,gap,prev,next,noteTotal,moveCost,
     selectBar,selectChord,selectNote,setKind,addBar,clearBar,clearAll,putForm,putNote,moveNote,delSel,
     switchList,newProg,deleteProg,confirmDel,shareProg,shareNote,shareUrl};

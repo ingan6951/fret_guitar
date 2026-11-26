@@ -14,6 +14,8 @@
   --fretwire:#8a8d94;
   --nut:#d8cdb4;
   --ink:#17120a;
+  --sky:#7cc4ff;    /* 지판 표에서 '눌러 본 음' 표시: 근음(brass)·구성음(ivory)과 겹치지 않는 색 */
+  --danger:#ff8f80;
   --display:'Bricolage Grotesque','Noto Sans KR',system-ui,sans-serif;
   --body:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
   color-scheme:dark;
@@ -47,6 +49,8 @@ h1,h2,p{margin:0}
 .chip{min-height:44px;border:1px solid var(--line);background:var(--panel);border-radius:8px;display:flex;align-items:center;justify-content:center;gap:6px;line-height:1.1;padding:4px 14px;font-weight:700;font-size:14px}
 .chip:disabled{opacity:.3;cursor:not-allowed}
 .chip[aria-pressed="true"]{background:var(--ivory);border-color:var(--ivory);color:var(--ink)}
+.chip.danger{color:var(--danger);border-color:#4a2a27}
+.chip.danger[aria-pressed="true"]{background:#c9473b;border-color:#c9473b;color:#fff}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg.compact .chip{flex:0 0 auto;min-width:56px}
 .count{font-size:13px;color:var(--steel)}
@@ -123,16 +127,21 @@ h1,h2,p{margin:0}
 .ncell{height:32px;border-radius:7px;border:1px solid var(--line);background:var(--rosewood);color:var(--ivory);font:inherit;font-size:12.5px;cursor:pointer;padding:0}
 .ncell.open{border-style:dashed}
 .ncell:hover{border-color:var(--steel)}
-.ncell.ct{background:#3a3326;border-color:var(--wound)}
+.ncell.ct{background:rgba(239,230,210,.78);border-color:var(--ivory);color:var(--ink);font-weight:700}
 .ncell.rt{background:var(--brass);border-color:var(--brass);color:var(--ink);font-weight:700}
-.ncell.pf,.ncell.on{outline:2px solid var(--ivory);outline-offset:-2px;font-weight:700}
+.ncell.pf{outline:3px solid var(--sky);outline-offset:-3px;font-weight:700}
+.ncell.pf:not(.rt):not(.ct){background:rgba(124,196,255,.22);color:#fff}
+.ncell.on{outline:2px solid var(--ivory);outline-offset:-2px;font-weight:700}
 .ncell.on{background:var(--ivory);color:var(--ink)}
 .ncell.used{border-color:var(--brass)}
 .ncell:disabled{opacity:.35;cursor:not-allowed}
 .ncell:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 .lg{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin:0 3px 0 6px;background:var(--rosewood);border:1px solid var(--line)}
 .lg.rt{background:var(--brass);border-color:var(--brass)}
-.lg.ct{background:#3a3326;border-color:var(--wound)}
+.lg.ct{background:rgba(239,230,210,.78);border-color:var(--ivory)}
+.lg.pf{background:rgba(124,196,255,.22);border:2px solid var(--sky)}
+.nlegend{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12px;color:var(--steel)}
+.nlegend .lg{margin:0 5px 0 0}
 
 /* ===== 진행 페이지 ===== */
 .plist{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -155,7 +164,10 @@ h1,h2,p{margin:0}
 .mnote{min-width:34px;height:30px;padding:0 8px;border:1px solid var(--wound);border-radius:999px;background:transparent;font-size:13px;font-weight:700}
 .mnote.on{background:var(--brass);border-color:var(--brass);color:var(--ink)}
 .addbar{width:100%}
-.seltool{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+/* 고른 칸 상태 줄: 아래 폼 목록·지판 표를 훑는 동안에도 보이도록 위에 붙는다 (넣은 결과가 바로 보이게) */
+.seltool{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;position:sticky;top:0;z-index:20;margin:0 -14px;padding:8px 14px;background:rgba(13,14,16,.94);border-bottom:1px solid var(--line);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.seltool .chip{min-height:40px}
+.barnow{color:var(--steel);font-weight:500}
 .selname{flex:1 1 100%;font-size:14px;font-weight:700}
 .editor{display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
 .editor .card{background:var(--ebony)}
@@ -215,3 +227,59 @@ h1,h2,p{margin:0}
 .pnote b{font-size:22px;line-height:1}
 .pnote small{font-size:11.5px;color:var(--steel)}
 @media (min-width:720px){ .playbars{grid-template-columns:repeat(2,minmax(0,1fr))} .pchord{flex-basis:210px} }
+
+/* ===== 메트로놈 줄 (곡의 빠르기·박자) ===== */
+.tempo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+.tempo.stick{position:sticky;top:0;z-index:20;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.mplay{min-height:44px;min-width:128px;padding:0 16px;border:1px solid var(--brass);border-radius:999px;background:var(--brass);color:var(--ink);font-weight:800;font-size:15px}
+.mplay.on{background:transparent;color:var(--brass)}
+.mplay:disabled{opacity:.35;cursor:not-allowed}
+.mplay:focus-visible{outline:2px solid var(--ivory);outline-offset:2px}
+.bpmbox{display:flex;align-items:center;gap:4px}
+.chip.step{width:44px;padding:0;font-size:20px}
+.bpmval{display:flex;align-items:baseline;gap:4px;padding:0 4px}
+.bpmval input{width:3.4ch;padding:4px 0;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ivory);font-family:var(--display);font-weight:800;font-size:24px;text-align:center;font-variant-numeric:tabular-nums}
+.bpmval input:focus-visible{outline:none;border-bottom-color:var(--brass)}
+.bpmval span{font-size:11px;color:var(--steel);font-weight:700}
+.beatsel{width:auto;min-width:78px}
+.beatdots{display:flex;gap:6px;align-items:center;margin-left:auto;padding:0 4px}
+.beatdots i{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.beatdots i.one{width:14px;height:14px}
+.beatdots i.on{background:var(--ivory)}
+.beatdots i.one.on{background:var(--brass)}
+.tempo .count{flex:1 1 100%}
+/* 지금 연주 중인 마디 */
+.bar.now,.playbar.now{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass)}
+.playbar.now{opacity:1}
+.playbar.now h3 span{color:var(--brass)}
+@media (max-width:719px){ .beatdots{margin-left:0;flex:1 1 100%;justify-content:center} }
+
+/* ===== 합주 방 ===== */
+.chip.roomgo{border-color:var(--brass);color:var(--brass)}
+.roomtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.roomtop h2{font-family:var(--display);font-size:18px;color:var(--ivory);font-weight:800;margin-right:auto}
+.badge{font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--steel)}
+.badge.host{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.conn{font-size:12px;color:var(--steel)}
+.conn.ok::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:#5fd38a;margin-right:6px;vertical-align:0}
+.songline{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.songline b{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.01em}
+.songline span{color:var(--steel);font-size:15px;font-weight:700}
+.guest{justify-items:center;text-align:center;padding:20px 12px;gap:14px}
+.guest .beatdots{margin:0;justify-content:center}
+.guest .beatdots i{width:18px;height:18px}
+.guest .beatdots i.one{width:22px;height:22px}
+.gstate{font-size:16px;font-weight:700}
+.mplay.big{min-height:64px;min-width:min(100%,320px);font-size:18px}
+.calib>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
+.calib>summary b{color:var(--brass)}
+.leadrow{display:flex;align-items:center;gap:12px}
+.leadrow input{flex:1;accent-color:var(--brass);min-height:44px}
+.leadrow span{min-width:56px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.calrow{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.tapcal{flex:1 1 220px;min-height:96px;border:2px solid var(--brass);border-radius:12px;background:rgba(233,162,59,.12);color:var(--ivory);font-size:16px;font-weight:800;touch-action:manipulation;user-select:none}
+.tapcal small{display:block;color:var(--steel);font-size:13px;margin-top:4px}
+.tapcal:active{background:rgba(233,162,59,.3)}
+.roomerr{gap:12px}
+.roomerr .chip{justify-self:start;text-decoration:none}
+.chip.roomgo{text-decoration:none}
