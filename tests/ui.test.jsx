@@ -150,17 +150,26 @@ test('진행 페이지: 처음에는 빈 마디 4개(코드 칸 1개씩), 1마�
   assert.ok(t.container.querySelector('.finder'),'코드 폼을 여기서 고른다');
 });
 
-test('코드 넣기: 고른 칸에 + 로 넣고 다음 칸으로 넘어가며, 이전 폼을 기준으로 보여 준다',()=>{
+test('코드 넣기: 고른 칸에 + 로 넣고, 다음 마디로 넘어가지 않고 그 마디가 계속 선택돼 있다',()=>{
   const t=boot(null,'prog');
   addFirst(t);
   assert.deepEqual(chordNames(t),[['Am'],[''],[''],['']]);
   assert.equal(barsOf(t)[0].chords[0].frets.length,6);
-  assert.equal(t.btn('slot','1.0').getAttribute('aria-pressed'),'true','다음 칸이 선택된다');
+  assert.equal(t.btn('slot','0.0').getAttribute('aria-pressed'),'true','넣은 칸이 그대로 선택돼 있다');
+  assert.equal(t.btn('slot','1.0').getAttribute('aria-pressed'),'false','다음 마디로 넘어가지 않는다');
+  assert.equal(t.btn('bar','0').getAttribute('aria-pressed'),'true');
+  // 마디를 고르지 않고 다른 코드를 계속 누르면 같은 칸이 바뀐다 (↺)
+  setChord(t,0,'maj'); fireEvent.click(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
+  assert.deepEqual(chordNames(t),[['C'],[''],[''],['']]);
+  assert.equal(t.btn('bar','0').getAttribute('aria-pressed'),'true');
+  // 마디를 직접 골라야 다음 마디에 들어간다. 앞 마디의 폼이 기준 폼으로 보인다
+  t.click('bar','1');
   assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼']);
-  assert.match(t.container.querySelector('.refs .card.ref').textContent,/1마디 Am/);
-  setChord(t,0,'maj'); addFirst(t);
+  assert.match(t.container.querySelector('.refs .card.ref').textContent,/1마디 C/);
   t.click('root','7'); addFirst(t);
-  assert.deepEqual(chordNames(t),[['Am'],['C'],['G'],['']]);
+  t.click('bar','2'); setChord(t,9,'min'); addFirst(t);
+  assert.deepEqual(chordNames(t),[['C'],['G'],['Am'],['']]);
+  assert.equal(t.btn('bar','2').getAttribute('aria-pressed'),'true');
 });
 
 test('마디당 코드 1·2·4개: 칸 수를 바꾸고 칸마다 채우면 마디 안에서 이어진다',()=>{
@@ -169,14 +178,15 @@ test('마디당 코드 1·2·4개: 칸 수를 바꾸고 칸마다 채우면 마�
   assert.deepEqual(chordNames(t),[['',''],[''],[''],['']]);
   addFirst(t);                                   // 1마디 첫 칸 Am → 같은 마디 둘째 칸으로
   assert.equal(t.btn('slot','0.1').getAttribute('aria-pressed'),'true');
-  setChord(t,0,'maj'); addFirst(t);              // 둘째 칸 C → 다음 마디 첫 칸으로
+  setChord(t,0,'maj'); addFirst(t);              // 둘째 칸 C → 마지막 칸이라 그대로 (다음 마디로 가지 않는다)
   assert.deepEqual(chordNames(t)[0],['Am','C']);
-  assert.equal(t.btn('slot','1.0').getAttribute('aria-pressed'),'true');
-  // 2마디를 4칸으로: 칸 4개
-  t.click('div','4');
+  assert.equal(t.btn('slot','0.1').getAttribute('aria-pressed'),'true');
+  assert.equal(t.btn('slot','1.0').getAttribute('aria-pressed'),'false');
+  // 2마디를 골라 4칸으로: 칸 4개
+  t.click('bar','1'); t.click('div','4');
   assert.deepEqual(chordNames(t)[1],['','','','']);
   assert.ok(t.container.querySelector('.bar.d4'));
-  for(const [r,q] of [[2,'min'],[7,'maj'],[9,'min'],[4,'min']]){ setChord(t,r,q); addFirst(t); }
+  for(const [i,[r,q]] of [[2,'min'],[7,'maj'],[9,'min'],[4,'min']].entries()){ t.click('slot',`1.${i}`); setChord(t,r,q); addFirst(t); }
   assert.deepEqual(chordNames(t)[1],['Dm','G','Am','Em']);
   // 칸 수를 줄이면 앞 칸이 남고, 다시 늘려도 빈 칸
   t.click('bar','1'); t.click('div','2');
@@ -189,7 +199,7 @@ test('마디당 코드 1·2·4개: 칸 수를 바꾸고 칸마다 채우면 마�
 
 test('코드 고쳐 쓰기·지우기: 칸을 고르면 그 코드가 불러와지고 ↺ 로 바꾸고 삭제로 비운다',()=>{
   const t=boot(null,'prog');
-  for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj']]){ setChord(t,r,q); addFirst(t); }
+  for(const [i,[r,q]] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj']].entries()){ t.click('bar',String(i)); setChord(t,r,q); addFirst(t); }
   assert.deepEqual(chordNames(t),[['C'],['Am'],['Dm'],['G']]);
   const keep=barsOf(t).map(b=>b.chords[0].frets.join());
   t.click('slot','1.0'); // Am 칸 선택
@@ -331,7 +341,7 @@ test('진행 공유 링크: 코드 1·2·4개와 멜로디, 제목까지 같은 
   Object.defineProperty(navigator,'clipboard',{value:{writeText:async x=>{ copied=x; }},configurable:true});
   const t=boot(null,'prog');
   addFirst(t);                                         // 1마디 Am
-  t.click('div','2'); setChord(t,0,'maj'); addFirst(t); // 2마디 C _
+  t.click('bar','1'); t.click('div','2'); setChord(t,0,'maj'); addFirst(t); // 2마디 C _
   t.click('kind','n'); fireEvent.click(noteCell(t,1,3)); fireEvent.click(noteCell(t,5,5));
   t.click('bar','3'); t.click('kind','c'); t.click('div','4'); setChord(t,7,'maj'); t.click('slot','3.3'); addFirst(t);
   fireEvent.change(t.container.querySelector('input[data-k="ptitle"]'),{target:{value:'가을 노래'}});

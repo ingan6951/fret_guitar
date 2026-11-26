@@ -102,11 +102,11 @@ export default function GuideProvider({children}){
   const addBar=()=>{ setState(s=>barsOf(s).length>=MAX_PROG?s:withBars(s,b=>[...b,newBar()])); setSel(s=>({bar:bars.length,kind:s.kind,i:s.kind==='n'?-1:0})); };
   const clearBar=()=>setState(s=>editBar(s,sel.bar,b=>({...b,chords:Array(b.div).fill(null),notes:[]})));
   const clearAll=()=>{ pick('pclear',''); setSel(START); };
-  // 고른 코드 칸에 폼을 넣고(있으면 바꾸고) 다음 칸을 고른 상태로 넘어간다
+  // 고른 코드 칸에 폼을 넣는다(있으면 바꾼다). 같은 마디에 칸이 남아 있으면 다음 칸으로 가지만, 다음 마디로는 넘어가지 않는다.
   const putForm=res=>{
     if(sel.kind!=='c') return;
     setState(s=>editBar(s,sel.bar,b=>({...b,chords:b.chords.map((c,i)=>i===sel.i?{root:s.root,q:s.q,frets:fretsOf(res)}:c)})));
-    setSel(sel.i+1<selBar.div?{bar:sel.bar,kind:'c',i:sel.i+1}:{bar:Math.min(sel.bar+1,bars.length-1),kind:'c',i:0});
+    setSel({bar:sel.bar,kind:'c',i:Math.min(sel.i+1,selBar.div-1)});
   };
   // 멜로디: 음을 고른 상태면 그 음을 바꾸고, 아니면 마디 끝에 더한다
   const putNote=(s,f)=>{
