@@ -129,3 +129,21 @@ console.log('모든 검사 통과');
   A.equal(S.sanitize({lists:Array(30).fill({title:'x',prog:[]})}).lists.length,S.MAX_LISTS,'진행은 최대 20개');
   console.log('링크 변환 검사 통과');
 }
+
+import * as S from '../lib/settings.js';
+{
+  const {test}=await import('node:test');
+  test('지판음: 항목 {s,f} 검증, 링크 변환, 저장값 정리',()=>{
+    const prog=[{root:9,q:'min',frets:[null,0,2,2,1,0]},{s:0,f:0},{s:5,f:12},null];
+    const text=S.encodeProg(prog);
+    A.equal(text,'9-min-x.0.2.2.1.0~N0.0~N5.12~_');
+    A.deepEqual(S.decodeProg(text),prog);
+    // 범위를 벗어나거나 모양이 틀린 지판음은 빈 마디
+    A.deepEqual(S.cleanProg([{s:6,f:0},{s:0,f:99},{s:-1,f:1},{s:1.5,f:1},{s:2}]).slice(0,5),[null,null,null,null,null]);
+    A.deepEqual(S.decodeProg('N6.0~N0.x~N0.3'),[null,null,{s:0,f:3},null]);
+    // 음 높이: 6번 줄 개방=E, 5번 줄 3프렛=C, 1번 줄 5프렛=A
+    A.equal(L.pcOfNote(0,0),4); A.equal(L.pcOfNote(1,3),0); A.equal(L.pcOfNote(5,5),9);
+    const v=L.noteVoicing(2,2); A.equal(v.bass,4); A.equal(v.baseFret,2); A.equal(v.notes.filter(Boolean).length,1);
+    A.equal(L.isNote({s:0,f:1}),true); A.equal(L.isNote({root:0,q:'maj',frets:[0,0,0,0,0,0]}),false);
+  });
+}

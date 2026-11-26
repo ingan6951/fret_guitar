@@ -1,7 +1,7 @@
 'use client';
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
+import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf,isNote,pcOfNote,noteVoicing,OPEN,MAX_FRET} from '../lib/fretlogic.js';
 import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_TITLE,newList,cleanTitle,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
@@ -23,6 +23,7 @@ export default function FretGuide(){
   const [sel,setSel]=useState(0); // 선택한 마디: 아래에서 고른 폼이 이 마디에 들어간다
   const [showAll,setShowAll]=useState(false); // 진행에 담은 폼을 차례로 모아 보기
   const [confirmDel,setConfirmDel]=useState(false); // 진행 삭제 확인 대기
+  const [mode,setMode]=useState('chord'); // 마디에 넣을 것: 'chord' 코드 폼 / 'note' 지판음
 
   const [shareNote,setShareNote]=useState(''); // 링크 복사 결과 안내
   const [shareUrl,setShareUrl]=useState('');   // 복사가 막힌 브라우저에서 직접 복사하도록 보여 주는 주소
@@ -73,13 +74,15 @@ export default function FretGuide(){
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
-  const chordName=c=>nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix;
+  const chordName=c=>isNote(c)?nm[pcOfNote(c.s,c.f)]:nm[c.root]+QUALITIES.find(x=>x.id===c.q).suffix; // 지판음이면 음이름
+  const noteWhere=c=>`${6-c.s}번 줄 ${c.f===0?'개방':c.f+'프렛'}`;
 
   // 마디에 담은 폼은 운지째로 보관한다 (조건을 바꿔도 그대로). 빈 마디는 null.
-  const resolved=useMemo(()=>prog.map(e=>e?voicingFromFrets(e.root,e.q,e.frets):null),[prog]);
+  const resolved=useMemo(()=>prog.map(e=>!e?null:isNote(e)?noteVoicing(e.s,e.f):voicingFromFrets(e.root,e.q,e.frets)),[prog]);
   const sl=Math.min(sel,prog.length-1); // 선택한 마디
   const selFilled=!!prog[sl];
   const filled=prog.map((e,i)=>e?i:-1).filter(i=>i>=0); // 코드가 들어 있는 마디 순번
+  const chordIdx=filled.filter(i=>!isNote(prog[i])); // 앞뒤 폼 비교·손 이동은 코드가 들어 있는 마디만
   const viewAll=showAll&&filled.length>0;
 
   // 이 코드의 폼 (데이터에 적힌 것만)
@@ -89,7 +92,9 @@ export default function FretGuide(){
   const choose=i=>{
     setShowAll(false);
     setSel(i);
-    setState(s=>progOf(s)[i]?{...s,root:progOf(s)[i].root,q:progOf(s)[i].q}:s);
+    const e=prog[i];
+    if(e) setMode(isNote(e)?'note':'chord');
+    if(e&&!isNote(e)) setState(s=>({...s,root:e.root,q:e.q}));
   };
   // 진행을 바꾸거나 새로 만들거나 지우면 선택한 마디·모아 보기·삭제 확인을 처음 상태로 돌린다
   const resetView=()=>{ setSel(0); setShowAll(false); setConfirmDel(false); };
@@ -115,12 +120,13 @@ export default function FretGuide(){
   const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r)});
   // 선택한 마디에 폼을 넣고(이미 있으면 바꾸고) 다음 마디를 고른 상태로 넘어간다
   const putForm=r=>{ setState(s=>withProg(s,p=>p.map((e,j)=>j===sl?entryOf(s,r):e))); setSel(Math.min(sl+1,prog.length-1)); };
+  const putNote=(s,f)=>{ setState(st=>withProg(st,p=>p.map((e,j)=>j===sl?{s,f}:e))); setSel(Math.min(sl+1,prog.length-1)); };
   const delSel=()=>{ pick('pdel',String(sl)); };
 
   // 폼 카드 순서: 앞뒤 마디에 코드가 없으면 낮은 프렛부터. 있으면 앞뒤 폼에서 이동이 적은 순
   // (다시 고르는 마디의 이웃 폼은 그대로 두므로 어긋남이 생기지 않는다).
-  const bi=[...filled].reverse().find(i=>i<sl);
-  const ai=filled.find(i=>i>sl);
+  const bi=[...chordIdx].reverse().find(i=>i<sl);
+  const ai=chordIdx.find(i=>i>sl);
   const before=bi!==undefined?resolved[bi]:undefined;
   const after=ai!==undefined?resolved[ai]:undefined;
   const shown=useMemo(()=>{
@@ -129,13 +135,13 @@ export default function FretGuide(){
     return items;
   },[list,before,after]);
   const refs=[bi!==undefined?{i:bi,tag:'이전 폼'}:null,ai!==undefined?{i:ai,tag:'다음 폼'}:null].filter(Boolean);
-  const curKey=selFilled?keyOf(prog[sl].root,prog[sl].q,prog[sl].frets):null;
+  const curKey=selFilled&&!isNote(prog[sl])?keyOf(prog[sl].root,prog[sl].q,prog[sl].frets):null;
   const hand=r=>handPos(r);
   const gap=(a,b)=>Math.abs(hand(a)-hand(b));
   const moveText=d=>d===0?'제자리':`${d}프렛 이동`;
 
   // 진행 전체 이동 합
-  const moved=filled.reduce((sum,idx,k)=>k?sum+gap(resolved[filled[k-1]],resolved[idx]):0,0);
+  const moved=chordIdx.reduce((sum,idx,k)=>k?sum+gap(resolved[chordIdx[k-1]],resolved[idx]):0,0);
 
   const fmt=n=>n.toLocaleString('ko-KR');
   // 좁은 화면에서는 카드를 가로로 한 장씩 넘겨 본다 (넓은 화면에서는 격자). 목록이 바뀌면 첫 장으로 돌아간다.
@@ -160,13 +166,26 @@ export default function FretGuide(){
     e.preventDefault(); slide(e.key==='ArrowLeft'?-1:1);
   };
 
+  const noteMode=mode==='note'&&!viewAll; // 지판음 고르기 화면
+  const PICK_FRETS=16; // 지판 그림에 보이는 프렛 0~15
+  const cur0=selFilled&&isNote(prog[sl])?prog[sl]:null;
+
   let cards,count,nCards=1;
   const solo=!viewAll&&shown.length===1;
   if(viewAll){
     nCards=filled.length;
     cards=filled.map((i,k)=>{
       const c=prog[i],res=resolved[i],name=chordName(c);
-      const d=k?gap(resolved[filled[k-1]],res):null;
+      if(isNote(c)) return (
+        <figure className="card" key={i+'n'+c.s+'.'+c.f}>
+          <figcaption>
+            <div className="who"><b>{i+1}마디 {name}</b><span>지판음 · {noteWhere(c)}</span></div>
+            <div className="capr"><div className="pos">{res.baseFret===0?'개방':res.baseFret+'프렛'}</div></div>
+          </figcaption>
+          <Diagram res={res} rootPc={-1} quality={null} label={label} names={nm} aria={`${name}, ${noteWhere(c)}`}/>
+        </figure>
+      );
+      const ci2=chordIdx.indexOf(i),d=ci2>0?gap(resolved[chordIdx[ci2-1]],res):null;
       return (
         <figure className="card" key={i+keyOf(c.root,c.q,c.frets)}>
           <figcaption>
@@ -209,7 +228,7 @@ export default function FretGuide(){
         <h1>기타 가이드</h1>
       </header>
 
-      <section className="rail" aria-label="코드 선택">
+      {!noteMode&&<section className="rail" aria-label="코드 선택">
         <div className="row">
           <h2 id="h-root">근음</h2>
           <select className="sel" data-k="root" aria-labelledby="h-root" value={String(root)} onChange={e=>pick('root',e.target.value)}>
@@ -229,16 +248,16 @@ export default function FretGuide(){
             {[1,2,3,4,5].map(k=><option key={k} value={String(k)}>{k}개 (이웃한 줄)</option>)}
           </select>
         </div>
-      </section>
+      </section>}
 
       <main className="stage">
         <div className="result">
-          <div className="tones-wrap">
+          {!noteMode&&<div className="tones-wrap">
             <div className="sym">{sym}</div>
             <div className="tones" aria-label="구성음">
               {q.tones.map(x=><span key={x} className={x===0?'r':''}>{nm[(root+x)%12]}</span>)}
             </div>
-          </div>
+          </div>}
           <details className="set">
             <summary aria-label="보기">⚙ 보기</summary>
             <div className="setbody">
@@ -265,6 +284,10 @@ export default function FretGuide(){
               <Chip k="plistdel" v="" on={confirmDel||undefined} onPick={deleteProg}>{confirmDel?'정말 삭제':'진행 삭제'}</Chip>
             </div>
           </div>
+          <div className="seg compact" role="group" aria-label="마디에 넣을 것">
+            <Chip k="imode" v="chord" on={mode==='chord'} onPick={(k,v)=>setMode(v)}>코드 폼</Chip>
+            <Chip k="imode" v="note" on={mode==='note'} onPick={(k,v)=>setMode(v)}>지판음</Chip>
+          </div>
           <div className="chart" aria-label="코드 차트">
             <div className="bars">
               {prog.map((c,i)=>(
@@ -279,7 +302,7 @@ export default function FretGuide(){
             {prog.length<MAX_PROG&&<button type="button" className="chip addbar" data-k="padd" onClick={addBar} aria-label="다음 마디 추가">＋ 마디 추가</button>}
           </div>
           <div className="prog-actions">
-            <span className="selname">{sl+1}마디 선택됨 · {selFilled?`${chordName(prog[sl])} (다른 폼은 아래에서 ↺)`:'아래에서 코드를 고르고 +'}{filled.length>1?` · 총 손 이동 ${moved}프렛`:''}</span>
+            <span className="selname">{sl+1}마디 선택됨 · {selFilled?(isNote(prog[sl])?`${chordName(prog[sl])} (${noteWhere(prog[sl])}) · 다른 음은 아래 지판에서 고르기`:`${chordName(prog[sl])} (다른 폼은 아래에서 ↺)`):(mode==='note'?'아래 지판에서 음을 고르기':'아래에서 코드를 고르고 +')}{chordIdx.length>1?` · 총 손 이동 ${moved}프렛`:''}</span>
             {selFilled&&<Chip k="pdel" v={String(sl)} onPick={delSel}>마디 비우기</Chip>}
             {filled.length>0&&<Chip k="pview" v="" on={showAll} onPick={()=>setShowAll(v=>!v)}>{viewAll?'폼 고르기':'진행 보기'}</Chip>}
             {filled.length>0&&<Chip k="pshare" v="" onPick={shareProg}>{shareNote||'링크 복사'}</Chip>}
@@ -288,6 +311,26 @@ export default function FretGuide(){
           {shareUrl&&<input className="shareurl" readOnly value={shareUrl} aria-label="공유 링크" onFocus={e=>e.target.select()}/>}
         </div>
 
+        {noteMode?(
+          <div className="notepick" role="group" aria-label="지판음 고르기">
+            <p className="count">{sl+1}마디에 넣을 음을 지판에서 누르세요{cur0?` · 지금 ${chordName(cur0)} (${noteWhere(cur0)})`:''}</p>
+            <div className="nscroll">
+              <div className="ngrid" style={{gridTemplateColumns:`46px repeat(${PICK_FRETS},minmax(34px,1fr))`}}>
+                <span className="nh"></span>
+                {Array.from({length:PICK_FRETS},(_,f)=><span key={f} className="nh">{f}</span>)}
+                {[5,4,3,2,1,0].map(si=>[
+                  <span key={'l'+si} className="nl">{6-si}번</span>,
+                  ...Array.from({length:PICK_FRETS},(_,f)=>{
+                    const pc=pcOfNote(si,f),on=!!cur0&&cur0.s===si&&cur0.f===f;
+                    return <button key={si+'.'+f} type="button" data-k="nnote" data-v={si+'.'+f} aria-pressed={String(on)}
+                      className={'ncell'+(f===0?' open':'')+(on?' on':'')} onClick={()=>putNote(si,f)}
+                      aria-label={`${nm[pc]}, ${6-si}번 줄 ${f===0?'개방현':f+'프렛'}, ${sl+1}마디에 넣기`}>{nm[pc]}</button>;
+                  })
+                ])}
+              </div>
+            </div>
+          </div>
+        ):<>
         {!viewAll&&refs.length>0&&(
           <div className="refs" aria-label="기준 폼">
             {refs.map(({i,tag})=>{
@@ -313,6 +356,8 @@ export default function FretGuide(){
           </div>
         )}
         <div className={'cards'+(solo?' solo':'')+(nCards===1?' one':'')} ref={cardsRef} tabIndex={0} aria-label="폼 목록" aria-live="polite" onScroll={onScroll} onKeyDown={onKey}>{cards}</div>
+
+        </>}
 
         <div className="foot">
           <div className="legend"><span><i className="r"></i>근음</span><span><i></i>구성음</span><span><i className="o"></i>개방현</span><span>×&nbsp;치지 않는 줄</span></div>

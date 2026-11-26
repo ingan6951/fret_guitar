@@ -17,7 +17,7 @@ export default function Diagram({res,rootPc,quality,label,names,aria}){
   const X=fret=>PAD_L+(fret-start)*CELL+CELL/2;
   const Y=s=>TOP+(s-1)*GAP;
   const mx=PAD_L-22;
-  const textFor=n=>label==='note'?names[n.pc]:degreeOf(quality,n.pc-rootPc);
+  const textFor=n=>label==='note'||!quality?names[n.pc]:degreeOf(quality,n.pc-rootPc); // 지판음(quality 없음)은 늘 음이름
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria}>
       <rect x={PAD_L} y="20" width={CELL*5} height="144" rx="3" fill="var(--rosewood)"/>

@@ -311,3 +311,42 @@ test('예전 저장값(진행 하나)은 첫 진행으로 옮겨 열린다, 공�
   assert.deepEqual(barNames(b),['G','','','']);
   assert.equal(window.location.search,'');
 });
+
+test('지판음: 모드를 바꿔 지판에서 음을 눌러 마디에 넣고, 코드와 섞어 쓰며, 진행 보기·링크로도 같다',async()=>{
+  let copied='';
+  Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{ copied=t; }},configurable:true});
+  const t=boot();
+  addFirst(t); // 1마디: Am
+  fireEvent.click(t.container.querySelector('button[data-k="imode"][data-v="note"]'));
+  assert.ok(t.container.querySelector('.notepick'),'지판 고르기가 보인다');
+  assert.equal(t.container.querySelector('.cards'),null,'코드 폼 카드는 숨긴다');
+  // 2마디(자동 선택됨): 6번 줄 개방(E), 3마디: 5번 줄 3프렛(C)
+  const cell=(s,f)=>t.container.querySelector(`button[data-k="nnote"][data-v="${s}.${f}"]`);
+  assert.equal(cell(0,0).textContent,'E');
+  assert.equal(cell(1,3).textContent,'C');
+  fireEvent.click(cell(0,0)); fireEvent.click(cell(1,3));
+  assert.deepEqual(progOf(t).slice(0,3),[{root:9,q:'min',frets:[null,0,2,2,1,0]},{s:0,f:0},{s:1,f:3}]);
+  assert.deepEqual(barNames(t),['Am','E','C','']);
+  // 노트 마디를 다시 누르면 그 음이 선택된 상태로 보이고 다른 음으로 바꿀 수 있다
+  fireEvent.click(t.container.querySelectorAll('.bars .bar')[1]);
+  assert.equal(cell(0,0).getAttribute('aria-pressed'),'true');
+  fireEvent.click(cell(5,5)); // 1번 줄 5프렛 = A
+  assert.deepEqual(progOf(t)[1],{s:5,f:5});
+  // 코드 마디를 누르면 코드 폼 모드로 돌아온다
+  fireEvent.click(t.container.querySelectorAll('.bars .bar')[0]);
+  assert.ok(t.container.querySelector('.cards'));
+  // 진행 보기: 코드 마디와 지판음 마디가 모두 나온다
+  fireEvent.click(t.container.querySelector('button[data-k="pview"]'));
+  assert.equal(t.container.querySelectorAll('.cards figure').length,3);
+  assert.match(t.container.querySelector('.cards').textContent,/지판음 · 1번 줄 5프렛/);
+  fireEvent.click(t.container.querySelector('button[data-k="pview"]'));
+  // 링크 복사 → 다른 브라우저에서 같은 진행
+  await act(async()=>{ fireEvent.click(t.container.querySelector('button[data-k="pshare"]')); });
+  const saved=progOf(t),q=new URL(copied).search;
+  assert.match(decodeURIComponent(q),/N5\.5/);
+  cleanup(); localStorage.clear();
+  window.history.pushState(null,'','/'+q);
+  const u=boot();
+  assert.deepEqual(progOf(u),saved);
+  assert.deepEqual(barNames(u),['Am','A','C','']);
+});
