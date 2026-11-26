@@ -2,7 +2,7 @@
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
-import {DEFAULT,MAX_PROG,loadState,saveState} from '../lib/settings.js';
+import {DEFAULT,MAX_PROG,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const LABELS=[['note','음이름'],['degree','도수']];
@@ -21,7 +21,19 @@ export default function FretGuide(){
   const [sel,setSel]=useState(null); // 진행에서 고른 칩의 순번: 그 자리를 다시 고르거나 제거할 대상
   const [showAll,setShowAll]=useState(false); // 진행에 담은 폼을 차례로 모아 보기
 
-  useEffect(()=>{ const s=loadState(); if(s) setState(s); setReady(true); },[]);
+  const [shareNote,setShareNote]=useState(''); // 링크 복사 결과 안내
+  const [shareUrl,setShareUrl]=useState('');   // 복사가 막힌 브라우저에서 직접 복사하도록 보여 주는 주소
+
+  useEffect(()=>{
+    let s=loadState();
+    // 공유 링크(?p=...)로 들어오면 그 진행을 불러온다 (저장해 둔 다른 설정은 그대로)
+    try{
+      const url=new URL(window.location.href),shared=decodeProg(url.searchParams.get('p'));
+      if(shared.length){ s={...(s||DEFAULT),prog:shared}; url.searchParams.delete('p'); window.history.replaceState(null,'',url.pathname+url.search+url.hash); }
+    }catch(e){}
+    if(s) setState(s);
+    setReady(true);
+  },[]);
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
 
   const pick=(k,v)=>setState(s=>{
@@ -58,6 +70,16 @@ export default function FretGuide(){
     if(selOk===i){ setSel(null); return; }
     setSel(i);
     setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q}:s);
+  };
+  const shareProg=async()=>{
+    try{
+      const url=new URL(window.location.href); url.search=''; url.hash='';
+      url.searchParams.set('p',encodeProg(prog));
+      const text=url.toString();
+      try{ await navigator.clipboard.writeText(text); setShareUrl(''); setShareNote('복사됨'); }
+      catch(e){ setShareUrl(text); setShareNote('아래 주소를 복사하세요'); }
+      setTimeout(()=>setShareNote(''),2500);
+    }catch(e){ setShareNote(''); }
   };
   const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r)});
   const addForm=r=>setState(s=>s.prog.length>=MAX_PROG?s:{...s,prog:[...s.prog,entryOf(s,r)]});
@@ -216,8 +238,10 @@ export default function FretGuide(){
               <span className="selname">{selOk!==null?`${selOk+1}번째 ${chordName(prog[selOk])}: 바꿀 폼을 ↺로 고르세요`:`총 손 이동 ${moved}프렛 · 아래에서 다음 코드를 고르고 +`}</span>
               {selOk!==null&&<Chip k="pdel" v={String(selOk)} onPick={delSel}>제거</Chip>}
               <Chip k="pview" v="" on={showAll} onPick={()=>setShowAll(v=>!v)}>{viewAll?'폼 고르기':'진행 보기'}</Chip>
+              <Chip k="pshare" v="" onPick={shareProg}>{shareNote||'링크 복사'}</Chip>
               <Chip k="pclear" v="" onPick={(k,v)=>{ pick(k,v); setSel(null); setShowAll(false); }}>비우기</Chip>
             </div>
+            {shareUrl&&<input className="shareurl" readOnly value={shareUrl} aria-label="공유 링크" onFocus={e=>e.target.select()}/>}
           </div>
         )}
 
