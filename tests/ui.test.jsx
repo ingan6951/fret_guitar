@@ -3,16 +3,26 @@
 import {test,afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {render,cleanup,fireEvent,act} from '@testing-library/react';
-import FretGuide from '../components/FretGuide.jsx';
+import {useState} from 'react';
+import GuideProvider from '../components/GuideProvider.jsx';
+import Shell from '../components/Shell.jsx';
+import ChordPage from '../components/ChordPage.jsx';
+import NotePage from '../components/NotePage.jsx';
+import ProgressionPage from '../components/ProgressionPage.jsx';
 import {CHORDS} from '../lib/chords.js';
 import {NOTE_SHARP,QUALITIES} from '../lib/fretlogic.js';
 import {STORAGE_KEY} from '../lib/settings.js';
 
 afterEach(()=>{ cleanup(); localStorage.clear(); });
 
+// 세 페이지를 한 상태 위에서 오가는 틀: 실제 앱처럼 상태(선택한 마디 등)가 페이지를 옮겨도 유지된다
+const PAGES={chord:ChordPage,note:NotePage,prog:ProgressionPage};
+let setPage;
+function App(){ const [p,sp]=useState('chord'); setPage=sp; const P=PAGES[p]; return <GuideProvider><Shell><P/></Shell></GuideProvider>; }
 function boot(saved){
   if(saved) localStorage.setItem(STORAGE_KEY,typeof saved==='string'?saved:JSON.stringify(saved));
-  const r=render(<FretGuide/>);
+  const r=render(<App/>);
+  const go=p=>act(()=>{ setPage(p); });
   // 근음·코드는 셀렉트박스, 나머지는 버튼이다. 셀렉트의 비활성 옵션은 고를 수 없으므로 무시한다.
   const sel=k=>r.container.querySelector(`select[data-k="${k}"]`);
   const btn=(k,v)=>{ const s=sel(k); return s?s.querySelector(`option[value="${v}"]`):r.container.querySelector(`button[data-k="${k}"][data-v="${v}"]`); };
@@ -21,7 +31,7 @@ function boot(saved){
   const svgs=()=>r.container.querySelectorAll('.cards svg').length;
   const state=()=>JSON.parse(localStorage.getItem(STORAGE_KEY));
   const count=()=>r.container.querySelector('.count').textContent;
-  return {...r,btn,flags,click,svgs,state,count};
+  return {...r,btn,flags,click,svgs,state,count,go};
 }
 const progOf=t=>{ const s=t.state(); return s.lists[s.cur].prog; };
 const barNames=t=>[...t.container.querySelectorAll('.bars .bar')].map(b=>{ const x=b.querySelector('.bc b'); return x?x.textContent:''; });
@@ -116,7 +126,7 @@ test('마디: 처음에는 빈 마디 4개가 있고 1마디가 선택돼 있다
   assert.equal(t.container.querySelectorAll('.bars .bar.blank').length,4);
   assert.equal(t.btn('bar','0').getAttribute('aria-pressed'),'true');
   assert.ok(t.container.querySelector('button[data-k="padd"]'),'마디 추가 버튼');
-  for(const k of ['pview','pshare','pclear','pdel']) assert.equal(t.container.querySelector(`button[data-k="${k}"]`),null,`${k}는 코드가 들어간 뒤에 나온다`);
+  for(const k of ['pshare','pclear','pdel']) assert.equal(t.container.querySelector(`button[data-k="${k}"]`),null,`${k}는 코드가 들어간 뒤에 나온다`);
   assert.deepEqual(barNames(t),['','','','']);
 });
 
@@ -179,14 +189,11 @@ test('마디 선택: 빈 마디를 건너뛰고 채우거나, 찬 마디를 다�
   // 빈 마디 건너뛰고 4마디 앞 쪽 마디에 채우기: 1마디 선택 → 다음 칸(2마디)로 넘어가지 않고 선택한 마디에 들어간다
   t.click('bar','1'); t.click('root','9'); t.click('q','min'); addFirst(t);
   assert.deepEqual(barNames(t),['C','Am','Dm','G']);
-  // 진행 보기: 담은 폼이 차례로 모이고 넘기기가 생긴다
+  // 진행 페이지: 담은 폼이 차례로 모인다
   t.click('bar','1'); t.click('pdel','1');
-  t.click('pview','');
+  t.go('prog');
   assert.equal(t.svgs(),3);
   assert.match(t.count(),/진행 3개 · 총 손 이동 \d+프렛/);
-  assert.equal(t.container.querySelector('.refs'),null,'모아 볼 때는 기준 폼을 숨긴다');
-  assert.ok(t.container.querySelector('.slidenav'));
-  t.click('pview','');
   // 전체 비우기: 빈 마디 4개로 돌아간다
   fireEvent.click(t.container.querySelector('button[data-k="padd"]'));
   t.click('pclear','');
@@ -221,6 +228,7 @@ test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 
   t.click('root','0'); t.click('q','maj'); addFirst(t);
   fireEvent.click(t.container.querySelector('button[data-k="padd"]')); // 5마디로 늘리고 3·4마디는 비워 둔다
   t.click('root','7'); addFirst(t);
+  t.go('prog');
   fireEvent.change(t.container.querySelector('input[data-k="ptitle"]'),{target:{value:'가을 노래'}});
   const saved=progOf(t);
   assert.deepEqual(barNames(t),['Am','C','','','G']);
@@ -246,20 +254,21 @@ test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 
 
 test('진행 제목·여러 진행: 제목 붙이기, 새 진행 만들기·전환, 삭제',()=>{
   const t=boot();
+  t.go('prog');
   const title=()=>t.container.querySelector('input[data-k="ptitle"]');
   const opts=()=>[...t.container.querySelectorAll('select[data-k="pswitch"] option')].map(o=>o.textContent);
   assert.equal(title().value,'진행 1');
   fireEvent.change(title(),{target:{value:'Autumn Leaves'}});
   assert.equal(t.state().lists[0].title,'Autumn Leaves');
   assert.deepEqual(opts(),['Autumn Leaves']);
-  addFirst(t);
+  t.go('chord'); addFirst(t); t.go('prog');
   // 새 진행: 빈 마디 4개로 시작하고 바로 전환된다
   fireEvent.click(t.container.querySelector('button[data-k="pnew"]'));
   assert.equal(t.state().lists.length,2); assert.equal(t.state().cur,1);
   assert.equal(title().value,'진행 2');
   assert.deepEqual(barNames(t),['','','','']);
   fireEvent.change(title(),{target:{value:'후렴'}});
-  t.click('root','0'); t.click('q','maj'); addFirst(t);
+  t.go('chord'); t.click('root','0'); t.click('q','maj'); addFirst(t); t.go('prog');
   assert.deepEqual(opts(),['Autumn Leaves','후렴']);
   // 전환: 각 진행의 마디가 그대로 있다
   t.click('pswitch','0');
@@ -280,7 +289,7 @@ test('진행 제목·여러 진행: 제목 붙이기, 새 진행 만들기·전�
   // 저장·복원
   const raw=JSON.stringify(t.state());
   cleanup();
-  const b=boot(raw);
+  const b=boot(raw); b.go('prog');
   assert.equal(b.container.querySelector('input[data-k="ptitle"]').value,'후렴');
   // 마지막 진행을 지우면 빈 진행 하나가 남는다
   const del2=()=>fireEvent.click(b.container.querySelector('button[data-k="plistdel"]'));
@@ -297,7 +306,7 @@ test('진행 제목·여러 진행: 제목 붙이기, 새 진행 만들기·전�
 
 test('예전 저장값(진행 하나)은 첫 진행으로 옮겨 열린다, 공유 링크는 기존 진행을 지우지 않고 새 진행으로 추가된다',()=>{
   const old={root:9,q:'min',label:'note',flat:false,prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]};
-  const a=boot(old);
+  const a=boot(old); a.go('prog');
   assert.deepEqual(barNames(a),['C','','','']);
   assert.equal(a.container.querySelector('input[data-k="ptitle"]').value,'진행 1');
   cleanup();
@@ -312,14 +321,15 @@ test('예전 저장값(진행 하나)은 첫 진행으로 옮겨 열린다, 공�
   assert.equal(window.location.search,'');
 });
 
-test('지판음: 모드를 바꿔 지판에서 음을 눌러 마디에 넣고, 코드와 섞어 쓰며, 진행 보기·링크로도 같다',async()=>{
+test('지판음 페이지: 지판에서 음을 눌러 마디에 넣고, 코드와 섞어 쓰며, 진행 페이지·링크로도 같다',async()=>{
   let copied='';
   Object.defineProperty(navigator,'clipboard',{value:{writeText:async t=>{ copied=t; }},configurable:true});
   const t=boot();
   addFirst(t); // 1마디: Am
-  fireEvent.click(t.container.querySelector('button[data-k="imode"][data-v="note"]'));
+  t.go('note');
   assert.ok(t.container.querySelector('.notepick'),'지판 고르기가 보인다');
-  assert.equal(t.container.querySelector('.cards'),null,'코드 폼 카드는 숨긴다');
+  assert.equal(t.container.querySelector('.cards'),null,'코드 폼 카드는 없다');
+  assert.ok(t.container.querySelector('.bars'),'마디 차트는 지판음 페이지에도 있다');
   // 2마디(자동 선택됨): 6번 줄 개방(E), 3마디: 5번 줄 3프렛(C)
   const cell=(s,f)=>t.container.querySelector(`button[data-k="nnote"][data-v="${s}.${f}"]`);
   assert.equal(cell(0,0).textContent,'E');
@@ -332,14 +342,10 @@ test('지판음: 모드를 바꿔 지판에서 음을 눌러 마디에 넣고, �
   assert.equal(cell(0,0).getAttribute('aria-pressed'),'true');
   fireEvent.click(cell(5,5)); // 1번 줄 5프렛 = A
   assert.deepEqual(progOf(t)[1],{s:5,f:5});
-  // 코드 마디를 누르면 코드 폼 모드로 돌아온다
-  fireEvent.click(t.container.querySelectorAll('.bars .bar')[0]);
-  assert.ok(t.container.querySelector('.cards'));
-  // 진행 보기: 코드 마디와 지판음 마디가 모두 나온다
-  fireEvent.click(t.container.querySelector('button[data-k="pview"]'));
+  // 진행 페이지: 코드 마디와 지판음 마디가 모두 나온다
+  t.go('prog');
   assert.equal(t.container.querySelectorAll('.cards figure').length,3);
   assert.match(t.container.querySelector('.cards').textContent,/지판음 · 1번 줄 5프렛/);
-  fireEvent.click(t.container.querySelector('button[data-k="pview"]'));
   // 링크 복사 → 다른 브라우저에서 같은 진행
   await act(async()=>{ fireEvent.click(t.container.querySelector('button[data-k="pshare"]')); });
   const saved=progOf(t),q=new URL(copied).search;

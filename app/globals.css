@@ -191,3 +191,13 @@ h1,h2,p{margin:0}
 .ncell:hover{border-color:var(--steel)}
 .ncell.on{background:var(--brass);border-color:var(--brass);color:#1a1206;font-weight:700}
 .ncell:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+
+/* 페이지 이동 탭과 마디 차트 머리 */
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{display:inline-flex;align-items:center;min-height:44px;padding:4px 16px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ivory);text-decoration:none;font-size:15px}
+.tab.on{background:var(--ivory);color:#1a1206;border-color:var(--ivory);font-weight:700}
+.tab:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.plist .ptitle-s{font-weight:700;font-size:16px}
+.plist .plink{color:var(--steel);font-size:13px;margin-left:10px}
+.top .set{align-self:flex-start}
+@media (min-width:920px){ .stage.wide{grid-column:1 / -1} }

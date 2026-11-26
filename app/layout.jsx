@@ -1,4 +1,6 @@
 import './globals.css';
+import GuideProvider from '../components/GuideProvider.jsx';
+import Shell from '../components/Shell.jsx';
 
 export const metadata={
   title:'기타 가이드',
@@ -14,7 +16,7 @@ export default function RootLayout({children}){
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin=""/>
         <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet"/>
       </head>
-      <body>{children}</body>
+      <body><GuideProvider><Shell>{children}</Shell></GuideProvider></body>
     </html>
   );
 }

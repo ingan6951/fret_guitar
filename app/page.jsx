@@ -1,5 +1,5 @@
-import FretGuide from '../components/FretGuide.jsx';
+import ChordPage from '../components/ChordPage.jsx';
 
 export default function Page(){
-  return <FretGuide/>;
+  return <ChordPage/>;
 }
