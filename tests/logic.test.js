@@ -121,6 +121,11 @@ console.log('모든 검사 통과');
   A.deepEqual(S.decodeProg('0-nope-1.2.3.4.5.6'),[],'없는 코드 종류');
   A.deepEqual(S.decodeProg('0-maj-1.2.3'),[],'줄 수가 맞지 않음');
   A.equal(S.decodeProg(Array(12).fill('0-maj-x.3.2.0.1.0').join('~')).length,8,'최대 8마디');
-  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).prog.length,4,'저장값이 짧아도 4마디');
+  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).lists[0].prog.length,4,'예전 저장값이 짧아도 4마디');
+  A.equal(S.sanitize({prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]}).lists[0].title,'진행 1','예전 저장값은 첫 진행으로');
+  const two=S.sanitize({lists:[{title:'a',prog:[]},{title:'b'.repeat(99),prog:[null,null,null,null,null]}],cur:5});
+  A.equal(two.lists.length,2,'진행 목록'); A.equal(two.cur,0,'범위 밖 cur는 0'); A.equal(two.lists[1].title.length,S.MAX_TITLE,'제목 길이 제한'); A.equal(two.lists[1].prog.length,5,'마디 수 유지');
+  A.equal(S.sanitize({lists:[]}).lists.length,1,'빈 목록이면 진행 하나');
+  A.equal(S.sanitize({lists:Array(30).fill({title:'x',prog:[]})}).lists.length,S.MAX_LISTS,'진행은 최대 20개');
   console.log('링크 변환 검사 통과');
 }

@@ -3,7 +3,7 @@ import {JSDOM} from 'jsdom';
 
 const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'http://localhost/'});
 const g=globalThis;
-for(const k of ['window','document','navigator','HTMLElement','Element','Node','Event','MouseEvent','KeyboardEvent','getComputedStyle','localStorage','MutationObserver','SVGElement','HTMLSelectElement','HTMLButtonElement']){
+for(const k of ['window','document','navigator','HTMLElement','Element','Node','Event','MouseEvent','KeyboardEvent','getComputedStyle','localStorage','MutationObserver','SVGElement','HTMLSelectElement','HTMLButtonElement','HTMLInputElement','HTMLTextAreaElement']){
   if(!(k in g)||k==='localStorage'||k==='navigator'){
     try{ Object.defineProperty(g,k,{value:k==='getComputedStyle'?dom.window.getComputedStyle.bind(dom.window):dom.window[k],configurable:true,writable:true}); }catch(e){}
   }

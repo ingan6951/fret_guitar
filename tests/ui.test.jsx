@@ -1,5 +1,5 @@
 // 화면 테스트: 데이터에 있는 코드만 고를 수 있고, 진행을 폼의 + 로 이어 담고 고치는 흐름, 설정 저장·복원
-import './setup-dom.js';
+// jsdom 환경은 scripts/test-ui.mjs 가 --import 로 먼저 불러온다
 import {test,afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {render,cleanup,fireEvent,act} from '@testing-library/react';
@@ -23,6 +23,7 @@ function boot(saved){
   const count=()=>r.container.querySelector('.count').textContent;
   return {...r,btn,flags,click,svgs,state,count};
 }
+const progOf=t=>{ const s=t.state(); return s.lists[s.cur].prog; };
 const barNames=t=>[...t.container.querySelectorAll('.bars .bar')].map(b=>{ const x=b.querySelector('.bc b'); return x?x.textContent:''; });
 const addFirst=t=>fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
 const nameOf=c=>NOTE_SHARP[c.root]+QUALITIES.find(q=>q.id===c.q).suffix;
@@ -58,7 +59,7 @@ test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 �
     assert.equal(t.container.querySelector('.sym').textContent,nameOf(c));
     assert.ok(t.svgs()>=1,`${nameOf(c)} 폼`);
     addFirst(t);
-    assert.equal(t.state().prog[0].frets.map(f=>f===null?'x':f).join(' '),expected[nameOf(c)],`${nameOf(c)} 운지`);
+    assert.equal(progOf(t)[0].frets.map(f=>f===null?'x':f).join(' '),expected[nameOf(c)],`${nameOf(c)} 운지`);
     cleanup(); localStorage.clear();
   }
 });
@@ -123,7 +124,7 @@ test('마디에 코드 넣기: + 로 선택한 마디에 넣고 다음 마디로
   const t=boot();
   addFirst(t);
   assert.deepEqual(barNames(t),['Am','','','']);
-  assert.equal(t.state().prog[0].frets.length,6);
+  assert.equal(progOf(t)[0].frets.length,6);
   assert.equal(t.btn('bar','1').getAttribute('aria-pressed'),'true','다음 마디가 선택된다');
   // 다음 코드를 고르는 동안 이전 폼을 보여 준다
   assert.deepEqual([...t.container.querySelectorAll('.refs .card.ref')].map(x=>x.dataset.v),['이전 폼']);
@@ -131,7 +132,7 @@ test('마디에 코드 넣기: + 로 선택한 마디에 넣고 다음 마디로
   t.click('root','0'); t.click('q','maj'); addFirst(t);
   t.click('root','7'); addFirst(t);
   assert.deepEqual(barNames(t),['Am','C','G','']);
-  assert.equal(t.state().prog.length,4);
+  assert.equal(progOf(t).length,4);
 });
 
 test('마디 추가: 하단 + 로 8마디까지 늘릴 수 있다',()=>{
@@ -154,7 +155,7 @@ test('마디 선택: 빈 마디를 건너뛰고 채우거나, 찬 마디를 다�
   const t=boot();
   for(const [r,q] of [[0,'maj'],[9,'min'],[2,'min'],[7,'maj']]){ t.click('root',String(r)); t.click('q',q); addFirst(t); }
   assert.deepEqual(barNames(t),['C','Am','Dm','G']);
-  const keep=t.state().prog.map(e=>e.frets.join());
+  const keep=progOf(t).map(e=>e.frets.join());
   // Am 마디 선택: 코드를 불러오고, 카드는 ↺ 로 바뀌고, 앞뒤 폼을 보여 준다
   t.click('bar','1');
   assert.deepEqual([t.state().root,t.state().q],[9,'min']);
@@ -168,13 +169,13 @@ test('마디 선택: 빈 마디를 건너뛰고 채우거나, 찬 마디를 다�
   t.click('root','4'); t.click('q','min');
   fireEvent.click(t.container.querySelector('button[data-k="frep"][data-v="0"]'));
   assert.deepEqual(barNames(t),['C','Em','Dm','G']);
-  const now=t.state().prog.map(e=>e.frets.join());
+  const now=progOf(t).map(e=>e.frets.join());
   assert.equal(now[0],keep[0]); assert.equal(now[2],keep[2]); assert.equal(now[3],keep[3]);
   assert.notEqual(now[1],keep[1]);
   // 마디 비우기: 그 마디만 비고 이웃 폼은 그대로
   t.click('bar','1'); t.click('pdel','1');
   assert.deepEqual(barNames(t),['C','','Dm','G']);
-  assert.equal(t.state().prog.length,4);
+  assert.equal(progOf(t).length,4);
   // 빈 마디 건너뛰고 4마디 앞 쪽 마디에 채우기: 1마디 선택 → 다음 칸(2마디)로 넘어가지 않고 선택한 마디에 들어간다
   t.click('bar','1'); t.click('root','9'); t.click('q','min'); addFirst(t);
   assert.deepEqual(barNames(t),['C','Am','Dm','G']);
@@ -220,22 +221,93 @@ test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 
   t.click('root','0'); t.click('q','maj'); addFirst(t);
   fireEvent.click(t.container.querySelector('button[data-k="padd"]')); // 5마디로 늘리고 3·4마디는 비워 둔다
   t.click('root','7'); addFirst(t);
-  const saved=t.state().prog;
+  fireEvent.change(t.container.querySelector('input[data-k="ptitle"]'),{target:{value:'가을 노래'}});
+  const saved=progOf(t);
   assert.deepEqual(barNames(t),['Am','C','','','G']);
   await act(async()=>{ fireEvent.click(t.container.querySelector('button[data-k="pshare"]')); });
-  assert.match(copied,/\?p=/);
+  assert.match(copied,/\?p=/); assert.match(decodeURIComponent(copied),/t=가을[+ ]노래/);
   assert.match(t.container.querySelector('button[data-k="pshare"]').textContent,/복사됨/);
   // 다른 기기(저장된 설정이 없는 브라우저)에서 링크로 열기
-  const p=new URL(copied).searchParams.get('p');
+  const q=new URL(copied).search;
   cleanup(); localStorage.clear();
-  window.history.pushState(null,'','/?p='+encodeURIComponent(p));
+  window.history.pushState(null,'','/'+q);
   const u=boot();
   assert.deepEqual(barNames(u),['Am','C','','','G']);
-  assert.deepEqual(u.state().prog,saved);
+  assert.deepEqual(progOf(u),saved);
+  assert.equal(u.state().lists.length,1,'비어 있는 첫 진행 자리에 불러온다');
+  assert.equal(u.state().lists[0].title,'가을 노래');
   assert.equal(window.location.search,'','불러온 뒤에는 주소의 진행 값을 지운다');
   // 잘못된 링크는 무시한다
   cleanup(); localStorage.clear();
   window.history.pushState(null,'','/?p=broken');
   const v=boot();
   assert.deepEqual(barNames(v),['','','','']);
+});
+
+test('진행 제목·여러 진행: 제목 붙이기, 새 진행 만들기·전환, 삭제',()=>{
+  const t=boot();
+  const title=()=>t.container.querySelector('input[data-k="ptitle"]');
+  const opts=()=>[...t.container.querySelectorAll('select[data-k="pswitch"] option')].map(o=>o.textContent);
+  assert.equal(title().value,'진행 1');
+  fireEvent.change(title(),{target:{value:'Autumn Leaves'}});
+  assert.equal(t.state().lists[0].title,'Autumn Leaves');
+  assert.deepEqual(opts(),['Autumn Leaves']);
+  addFirst(t);
+  // 새 진행: 빈 마디 4개로 시작하고 바로 전환된다
+  fireEvent.click(t.container.querySelector('button[data-k="pnew"]'));
+  assert.equal(t.state().lists.length,2); assert.equal(t.state().cur,1);
+  assert.equal(title().value,'진행 2');
+  assert.deepEqual(barNames(t),['','','','']);
+  fireEvent.change(title(),{target:{value:'후렴'}});
+  t.click('root','0'); t.click('q','maj'); addFirst(t);
+  assert.deepEqual(opts(),['Autumn Leaves','후렴']);
+  // 전환: 각 진행의 마디가 그대로 있다
+  t.click('pswitch','0');
+  assert.equal(title().value,'Autumn Leaves');
+  assert.deepEqual(barNames(t),['Am','','','']);
+  t.click('pswitch','1');
+  assert.deepEqual(barNames(t),['C','','','']);
+  // 삭제: 코드가 있는 진행은 한 번 더 눌러야 지워진다
+  t.click('pswitch','0');
+  const del=()=>fireEvent.click(t.container.querySelector('button[data-k="plistdel"]'));
+  del();
+  assert.equal(t.state().lists.length,2,'첫 클릭은 확인만');
+  assert.match(t.container.querySelector('button[data-k="plistdel"]').textContent,/정말 삭제/);
+  del();
+  assert.equal(t.state().lists.length,1);
+  assert.equal(title().value,'후렴');
+  assert.deepEqual(barNames(t),['C','','','']);
+  // 저장·복원
+  const raw=JSON.stringify(t.state());
+  cleanup();
+  const b=boot(raw);
+  assert.equal(b.container.querySelector('input[data-k="ptitle"]').value,'후렴');
+  // 마지막 진행을 지우면 빈 진행 하나가 남는다
+  const del2=()=>fireEvent.click(b.container.querySelector('button[data-k="plistdel"]'));
+  del2(); del2();
+  assert.equal(b.state().lists.length,1);
+  assert.equal(b.container.querySelector('input[data-k="ptitle"]').value,'진행 1');
+  assert.deepEqual(barNames(b),['','','','']);
+  // 빈 진행은 확인 없이 바로 지워진다
+  fireEvent.click(b.container.querySelector('button[data-k="pnew"]'));
+  assert.equal(b.state().lists.length,2);
+  del2();
+  assert.equal(b.state().lists.length,1);
+});
+
+test('예전 저장값(진행 하나)은 첫 진행으로 옮겨 열린다, 공유 링크는 기존 진행을 지우지 않고 새 진행으로 추가된다',()=>{
+  const old={root:9,q:'min',label:'note',flat:false,prog:[{root:0,q:'maj',frets:[null,3,2,0,1,0]}]};
+  const a=boot(old);
+  assert.deepEqual(barNames(a),['C','','','']);
+  assert.equal(a.container.querySelector('input[data-k="ptitle"]').value,'진행 1');
+  cleanup();
+  // 이미 진행이 있는 브라우저에서 링크 열기
+  localStorage.setItem(STORAGE_KEY,JSON.stringify({lists:[{title:'내 진행',prog:[{root:9,q:'min',frets:[null,0,2,2,1,0]},null,null,null]}],cur:0}));
+  window.history.pushState(null,'','/?p='+encodeURIComponent('7-maj-3.2.0.0.0.3~_~_~_')+'&t='+encodeURIComponent('받은 진행'));
+  const b=boot();
+  assert.equal(b.state().lists.length,2);
+  assert.deepEqual(b.state().lists.map(l=>l.title),['내 진행','받은 진행']);
+  assert.equal(b.state().cur,1);
+  assert.deepEqual(barNames(b),['G','','','']);
+  assert.equal(window.location.search,'');
 });

@@ -2,10 +2,12 @@
 // 기타 가이드 화면 전체. 상태는 하나의 객체로 두고 브라우저에 저장한다.
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,handPos,moveCost,hasChord,rootsWithData,formsFor,voicingFromFrets,fretsOf} from '../lib/fretlogic.js';
-import {DEFAULT,MIN_BARS,MAX_PROG,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
+import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_TITLE,newList,cleanTitle,loadState,saveState,encodeProg,decodeProg} from '../lib/settings.js';
 import Diagram,{ariaFor} from './Diagram.jsx';
 
 const LABELS=[['note','음이름'],['degree','도수']];
+const progOf=s=>s.lists[s.cur].prog;
+const withProg=(s,fn)=>({...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,prog:fn(l.prog)}:l)});
 const keyOf=(root,qid,frets)=>`${root}${qid}:${frets.map(f=>f===null?'x':f).join(',')}`;
 
 function Chip({k,v,on,disabled,onPick,children,className='chip',...rest}){
@@ -20,6 +22,7 @@ export default function FretGuide(){
   const [ready,setReady]=useState(false);
   const [sel,setSel]=useState(0); // 선택한 마디: 아래에서 고른 폼이 이 마디에 들어간다
   const [showAll,setShowAll]=useState(false); // 진행에 담은 폼을 차례로 모아 보기
+  const [confirmDel,setConfirmDel]=useState(false); // 진행 삭제 확인 대기
 
   const [shareNote,setShareNote]=useState(''); // 링크 복사 결과 안내
   const [shareUrl,setShareUrl]=useState('');   // 복사가 막힌 브라우저에서 직접 복사하도록 보여 주는 주소
@@ -29,7 +32,15 @@ export default function FretGuide(){
     // 공유 링크(?p=...)로 들어오면 그 진행을 불러온다 (저장해 둔 다른 설정은 그대로)
     try{
       const url=new URL(window.location.href),shared=decodeProg(url.searchParams.get('p'));
-      if(shared.some(Boolean)){ s={...(s||DEFAULT),prog:shared}; url.searchParams.delete('p'); window.history.replaceState(null,'',url.pathname+url.search+url.hash); }
+      if(shared.some(Boolean)){
+        // 공유받은 진행은 기존 진행을 덮어쓰지 않고 새 진행으로 추가한다
+        const base=s||DEFAULT,title=cleanTitle(url.searchParams.get('t'))||'공유받은 진행';
+        const onlyEmpty=base.lists.length===1&&!base.lists[0].prog.some(Boolean); // 비어 있는 첫 진행뿐이면 그 자리에 둔다
+        const lists=onlyEmpty?[]:base.lists.length>=MAX_LISTS?base.lists.slice(0,MAX_LISTS-1):base.lists;
+        s={...base,lists:[...lists,{title,prog:shared}],cur:lists.length};
+        url.searchParams.delete('p'); url.searchParams.delete('t');
+        window.history.replaceState(null,'',url.pathname+url.search+url.hash);
+      }
     }catch(e){}
     if(s) setState(s);
     setReady(true);
@@ -44,13 +55,21 @@ export default function FretGuide(){
       case 'n': return {...s,n:Number(v)};
       case 'label': return {...s,label:v};
       case 'acc': return {...s,flat:v==='flat'};
-      case 'pdel': return {...s,prog:s.prog.map((e,j)=>j===Number(v)?null:e)};
-      case 'pclear': return {...s,prog:Array(MIN_BARS).fill(null)};
+      case 'pdel': return withProg(s,p=>p.map((e,j)=>j===Number(v)?null:e));
+      case 'pclear': return withProg(s,()=>Array(MIN_BARS).fill(null));
+      case 'ptitle': return {...s,lists:s.lists.map((l,i)=>i===s.cur?{...l,title:cleanTitle(v)}:l)};
+      case 'pswitch': { const i=Number(v); return i>=0&&i<s.lists.length?{...s,cur:i}:s; }
+      case 'pnew': return s.lists.length>=MAX_LISTS?s:{...s,lists:[...s.lists,newList(`진행 ${s.lists.length+1}`)],cur:s.lists.length};
+      case 'plistdel': {
+        const lists=s.lists.filter((_,i)=>i!==s.cur);
+        return lists.length?{...s,lists,cur:Math.min(s.cur,lists.length-1)}:{...s,lists:[newList('진행 1')],cur:0};
+      }
       default: return s;
     }
   });
 
-  const {root,q:qid,n,label,flat,prog}=state;
+  const {root,q:qid,n,label,flat,lists,cur}=state;
+  const prog=lists[cur].prog; // 지금 보는 진행의 마디들
   const nm=flat?NOTE_FLAT:NOTE_SHARP;
   const q=QUALITIES.find(x=>x.id===qid);
   const sym=nm[root]+q.suffix;
@@ -70,13 +89,23 @@ export default function FretGuide(){
   const choose=i=>{
     setShowAll(false);
     setSel(i);
-    setState(s=>s.prog[i]?{...s,root:s.prog[i].root,q:s.prog[i].q}:s);
+    setState(s=>progOf(s)[i]?{...s,root:progOf(s)[i].root,q:progOf(s)[i].q}:s);
   };
-  const addBar=()=>{ setState(s=>s.prog.length>=MAX_PROG?s:{...s,prog:[...s.prog,null]}); setSel(prog.length); setShowAll(false); };
+  // 진행을 바꾸거나 새로 만들거나 지우면 선택한 마디·모아 보기·삭제 확인을 처음 상태로 돌린다
+  const resetView=()=>{ setSel(0); setShowAll(false); setConfirmDel(false); };
+  const switchList=v=>{ pick('pswitch',v); resetView(); };
+  const newProg=()=>{ pick('pnew',''); resetView(); };
+  const deleteProg=()=>{
+    // 코드가 들어 있는 진행은 한 번 더 눌러야 지운다
+    if(!confirmDel&&prog.some(Boolean)){ setConfirmDel(true); setTimeout(()=>setConfirmDel(false),3000); return; }
+    pick('plistdel',''); resetView();
+  };
+  const addBar=()=>{ setState(s=>progOf(s).length>=MAX_PROG?s:withProg(s,p=>[...p,null])); setSel(prog.length); setShowAll(false); };
   const shareProg=async()=>{
     try{
       const url=new URL(window.location.href); url.search=''; url.hash='';
       url.searchParams.set('p',encodeProg(prog));
+      if(lists[cur].title) url.searchParams.set('t',lists[cur].title);
       const text=url.toString();
       try{ await navigator.clipboard.writeText(text); setShareUrl(''); setShareNote('복사됨'); }
       catch(e){ setShareUrl(text); setShareNote('아래 주소를 복사하세요'); }
@@ -85,7 +114,7 @@ export default function FretGuide(){
   };
   const entryOf=(s,r)=>({root:s.root,q:s.q,frets:fretsOf(r)});
   // 선택한 마디에 폼을 넣고(이미 있으면 바꾸고) 다음 마디를 고른 상태로 넘어간다
-  const putForm=r=>{ setState(s=>({...s,prog:s.prog.map((e,j)=>j===sl?entryOf(s,r):e)})); setSel(Math.min(sl+1,prog.length-1)); };
+  const putForm=r=>{ setState(s=>withProg(s,p=>p.map((e,j)=>j===sl?entryOf(s,r):e))); setSel(Math.min(sl+1,prog.length-1)); };
   const delSel=()=>{ pick('pdel',String(sl)); };
 
   // 폼 카드 순서: 앞뒤 마디에 코드가 없으면 낮은 프렛부터. 있으면 앞뒤 폼에서 이동이 적은 순
@@ -225,10 +254,21 @@ export default function FretGuide(){
         </div>
 
         <div className="prog">
+          <div className="plist">
+            <input className="titlein" type="text" data-k="ptitle" value={lists[cur].title} maxLength={MAX_TITLE} placeholder={`진행 ${cur+1} 제목`}
+              aria-label="진행 제목" onChange={e=>pick('ptitle',e.target.value)}/>
+            <div className="prow">
+              <select className="sel" data-k="pswitch" aria-label="진행 선택" value={String(cur)} onChange={e=>switchList(e.target.value)}>
+                {lists.map((l,i)=><option key={i} value={String(i)}>{l.title||`진행 ${i+1}`}</option>)}
+              </select>
+              <Chip k="pnew" v="" disabled={lists.length>=MAX_LISTS} onPick={newProg}>＋ 새 진행</Chip>
+              <Chip k="plistdel" v="" on={confirmDel||undefined} onPick={deleteProg}>{confirmDel?'정말 삭제':'진행 삭제'}</Chip>
+            </div>
+          </div>
           <div className="chart" aria-label="코드 차트">
             <div className="bars">
               {prog.map((c,i)=>(
-                <button key={i} type="button" className={'bar'+(sl===i?' sel':'')+(c?'':' blank')} data-k="bar" data-v={String(i)}
+                <button key={i} type="button" className={'bar'+(sl===i?' picked':'')+(c?'':' blank')} data-k="bar" data-v={String(i)}
                   aria-pressed={String(sl===i)} aria-label={c?`${i+1}마디 ${chordName(c)} 선택`:`${i+1}마디 비어 있음, 선택`} onClick={()=>choose(i)}>
                   <small className="bn">{i+1}</small>
                   {c?<span className="bc"><b>{chordName(c)}</b><small>{resolved[i].baseFret===0?'개방':resolved[i].baseFret+'프렛'}</small></span>
