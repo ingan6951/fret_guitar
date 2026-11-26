@@ -217,3 +217,17 @@ test('진행 공유 링크: 링크 복사 → 그 링크로 들어오면 같은 
   const v=boot();
   assert.equal(v.container.querySelector('.prog'),null);
 });
+
+test('악보: 진행이 마디(코드 차트)로 보인다',()=>{
+  const t=boot();
+  addFirst(t); t.click('root','0'); t.click('q','maj'); addFirst(t); t.click('root','7'); addFirst(t);
+  assert.equal(t.container.querySelector('.chart'),null);
+  t.click('pchart','');
+  assert.equal(t.container.querySelectorAll('.bars .bar').length,3,'한 마디에 1개면 3마디');
+  assert.deepEqual([...t.container.querySelectorAll('.bars .bc b')].map(x=>x.textContent),['Am','C','G']);
+  t.click('perbar','2');
+  assert.equal(t.container.querySelectorAll('.bars .bar').length,2,'한 마디에 2개면 2마디');
+  assert.equal(t.container.querySelectorAll('.bars .bar')[1].querySelectorAll('.bc').length,1,'마지막 마디는 1개');
+  t.click('pchart','');
+  assert.equal(t.container.querySelector('.chart'),null);
+});

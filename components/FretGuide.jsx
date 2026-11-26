@@ -21,6 +21,8 @@ export default function FretGuide(){
   const [sel,setSel]=useState(null); // 진행에서 고른 칩의 순번: 그 자리를 다시 고르거나 제거할 대상
   const [showAll,setShowAll]=useState(false); // 진행에 담은 폼을 차례로 모아 보기
 
+  const [chart,setChart]=useState(false); // 진행을 코드 차트(마디) 악보로 보기
+  const [perBar,setPerBar]=useState(1);   // 한 마디에 들어가는 코드 수
   const [shareNote,setShareNote]=useState(''); // 링크 복사 결과 안내
   const [shareUrl,setShareUrl]=useState('');   // 복사가 막힌 브라우저에서 직접 복사하도록 보여 주는 주소
 
@@ -238,9 +240,27 @@ export default function FretGuide(){
               <span className="selname">{selOk!==null?`${selOk+1}번째 ${chordName(prog[selOk])}: 바꿀 폼을 ↺로 고르세요`:`총 손 이동 ${moved}프렛 · 아래에서 다음 코드를 고르고 +`}</span>
               {selOk!==null&&<Chip k="pdel" v={String(selOk)} onPick={delSel}>제거</Chip>}
               <Chip k="pview" v="" on={showAll} onPick={()=>setShowAll(v=>!v)}>{viewAll?'폼 고르기':'진행 보기'}</Chip>
+              <Chip k="pchart" v="" on={chart} onPick={()=>setChart(v=>!v)}>악보</Chip>
               <Chip k="pshare" v="" onPick={shareProg}>{shareNote||'링크 복사'}</Chip>
               <Chip k="pclear" v="" onPick={(k,v)=>{ pick(k,v); setSel(null); setShowAll(false); }}>비우기</Chip>
             </div>
+            {chart&&(
+              <div className="chart" aria-label="코드 차트">
+                <div className="seg compact" role="group" aria-label="마디당 코드 수">
+                  {[1,2].map(n=><Chip key={n} k="perbar" v={String(n)} on={perBar===n} onPick={()=>setPerBar(n)}>{`한 마디에 ${n}개`}</Chip>)}
+                </div>
+                <div className="bars">
+                  {Array.from({length:Math.ceil(prog.length/perBar)},(_,m)=>(
+                    <div className="bar" key={m} data-k="bar" data-v={String(m)}>
+                      {prog.slice(m*perBar,m*perBar+perBar).map((c,j)=>{
+                        const i=m*perBar+j;
+                        return <span className="bc" key={i}><b>{chordName(c)}</b><small>{resolved[i].baseFret===0?'개방':resolved[i].baseFret+'프렛'}</small></span>;
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {shareUrl&&<input className="shareurl" readOnly value={shareUrl} aria-label="공유 링크" onFocus={e=>e.target.select()}/>}
           </div>
         )}

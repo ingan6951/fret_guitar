@@ -160,3 +160,13 @@ h1,h2,p{margin:0}
 .card.ref .pos{font-size:13px;padding:2px 10px}
 
 .shareurl{width:100%;min-height:44px;padding:6px 10px;border:1px solid var(--line,#444);border-radius:8px;background:transparent;color:inherit;font-size:13px;box-sizing:border-box}
+
+.chart{display:grid;gap:10px}
+.bars{display:grid;grid-template-columns:repeat(2,1fr);border-top:1px solid var(--line,#555);border-left:2px solid currentColor}
+@media(min-width:700px){.bars{grid-template-columns:repeat(4,1fr)}}
+.bar{display:flex;align-items:center;justify-content:space-around;min-height:76px;padding:6px 4px;border-right:2px solid currentColor;border-bottom:1px solid var(--line,#555)}
+.bc{display:grid;justify-items:center;gap:2px;flex:1}
+.bc b{font-size:22px;line-height:1.1}
+.bc small{font-size:11px;opacity:.7}
+.bar .bc+.bc{border-left:1px dashed var(--line,#555)}
+.bar:last-child{border-right-width:5px;border-right-style:double}
