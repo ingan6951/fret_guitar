@@ -30,7 +30,12 @@ for(const [q,shape,low] of [['maj','E',0],['min','E',0],['maj','A',1],['min','A'
   }
 }
 eq(CHORDS.slice(8,52).map(c=>JSON.stringify(c)).sort(),moved.map(c=>JSON.stringify(c)).sort(),'프렛을 올린 폼 44개');
-eq(CHORDS.length,347,'코드 폼 개수');
+eq(CHORDS.length,545,'코드 폼 개수 (347 + C·G·D 모양을 옮긴 198)');
+// 맨 뒤 198개는 C·G·D 근음의 오픈 폼을 k프렛 올린 것 (개방현 포함 폼 → 모든 줄 +k)
+for(const c of CHORDS.slice(347)){
+  const ok=CHORDS.slice(0,347).some(o=>[0,2,7].includes(o.root)&&o.frets.includes(0)&&o.q===c.q?false:false)||CHORDS.slice(0,347).some(o=>[0,2,7].includes(o.root)&&o.frets.includes(0)&&(()=>{ const k=(c.root-o.root+12)%12; return k>0&&JSON.stringify(o.frets.map(f=>f===null?null:f+k))===JSON.stringify(c.frets)&&o.q===c.q; })());
+  if(!ok) fails.push(`${nameOf(c)} ${JSON.stringify(c.frets)}: 오픈 폼을 올린 것이 아님`);
+}
 // 12개 근음 모두 Major·minor·7·m7·maj7·sus4·sus2가 있다 (add9는 오픈 폼만 있어 일부 근음)
 for(let r=0;r<12;r++) for(const q of QUALITIES.map(x=>x.id).filter(x=>x!=='add9')) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
 for(let r=0;r<12;r++) for(const q of ['maj','min']) if(!hasChord(r,q)) fails.push(`${NOTE_SHARP[r]} ${q} 없음`);
@@ -64,7 +69,7 @@ CHORDS.forEach(c=>{
   eq(bar.baseFret,5,'바레 위치'); eq(handPos(bar),5,'손 위치');
   // 저장한 운지에서 그대로 되살아난다
   CHORDS.forEach(c=>{ const r=formsFor(c.root,c.q).find(x=>JSON.stringify(fretsOf(x))===JSON.stringify(c.frets)); if(!r){ fails.push(`${nameOf(c)} 폼 목록에 없음`); return; } eq(fretsOf(r),c.frets,`${nameOf(c)} 운지 왕복`); eq(r,voicingFromFrets(c.root,c.q,fretsOf(r)),`${nameOf(c)} 복원`); });
-  eq(L.formsFor(0,'min').length,2,'Cm은 폼 2개(E·A 모양)'); eq(L.formsFor(0,'zzz'),[],'없는 종류는 폼이 없다'); eq(hasChord(0,'zzz'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
+  eq(L.formsFor(0,'min').length,3,'Cm은 폼 3개(E·A 모양 + Dm 모양을 올린 것)'); eq(L.formsFor(0,'zzz'),[],'없는 종류는 폼이 없다'); eq(hasChord(0,'zzz'),false,'hasChord 없음'); eq(hasChord(0,'maj'),true,'hasChord 있음');
   // 창 시작: 5프렛 안이면 1, 넘으면 가장 낮은 프렛
   eq(windowStart(am.notes),1,'Am 창'); eq(windowStart(bar.notes),5,'바레 창');
 }
@@ -88,8 +93,8 @@ console.log('모든 검사 통과');
   const asStr=f=>f.map(x=>x===null?'x':x).join('');
   const d2=L.formsFor(2,'maj',2).map(r=>asStr(L.fretsOf(r)));
   A.deepEqual(d2.slice(0,3),['xx02xx','xxx23x','xxxx32'],'D 오픈 폼 2개');
-  A.equal(L.formsFor(2,'maj',0).length,3,'D 전체 폼 3개(오픈, E·A 모양)');
-  A.equal(L.formsFor(2,'maj',9).length,3,'줄 수가 더 많으면 전체 폼');
-  A.equal(L.formsFor(4,'min',3).length,7,'Em: 오픈 6줄 4가지 + A 모양 5줄 3가지');
+  A.equal(L.formsFor(2,'maj',0).length,5,'D 전체 폼 5개(오픈, E·A·C·G 모양)');
+  A.equal(L.formsFor(2,'maj',9).length,5,'줄 수가 더 많으면 전체 폼');
+  A.equal(L.formsFor(4,'min',3).length,9,'Em 이웃한 3줄 조합 전체');
   console.log('음 개수 검사 통과');
 }

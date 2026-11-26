@@ -27,11 +27,11 @@ const chipNames=t=>[...t.container.querySelectorAll('button[data-k="psel"]')].ma
 const addFirst=t=>fireEvent.click(t.container.querySelector('button[data-k="fadd"][data-v="0"]'));
 const nameOf=c=>NOTE_SHARP[c.root]+QUALITIES.find(q=>q.id===c.q).suffix;
 
-test('처음 화면: Am 폼 2개(오픈, 5프렛 바레), 첫 폼은 개방 위치·5번 줄 베이스',()=>{
+test('처음 화면: Am 폼 3개(오픈, 5프렛 바레, 옮긴 폼), 첫 폼은 개방 위치·5번 줄 베이스',()=>{
   const t=boot();
   assert.equal(t.container.querySelector('.sym').textContent,'Am');
-  assert.equal(t.svgs(),2);
-  assert.match(t.count(),/폼 2개/);
+  assert.equal(t.svgs(),3);
+  assert.match(t.count(),/폼 3개/);
   assert.equal(t.container.querySelector('.card .who b').textContent,'5번 줄');
   assert.equal(t.container.querySelector('.card .pos').textContent,'개방');
   // 소리 나는 5줄: 개방 2줄(5·1번) + 누르는 3줄, 6번 줄은 뮤트
@@ -52,7 +52,7 @@ test('조건은 근음·코드·음 개수뿐이고 묶음·진행 추가 버튼
 
 test('오픈 코드 8개가 이미지와 같은 운지로 나온다 (데이터 맨 앞 8개)',()=>{
   const expected={Em:'0 2 2 0 0 0',Am:'x 0 2 2 1 0',C:'x 3 2 0 1 0',D:'x x 0 2 3 2',G:'3 2 0 0 0 3',E:'0 2 2 1 0 0',A:'x 0 2 2 2 0',Dm:'x x 0 2 3 1'};
-  assert.equal(CHORDS.length,347);
+  assert.equal(CHORDS.length,545);
   for(const c of CHORDS.slice(0,8)){
     const t=boot({root:c.root,q:c.q});
     assert.equal(t.container.querySelector('.sym').textContent,nameOf(c));
@@ -70,19 +70,19 @@ test('근음 12개·코드 2종류를 모두 고를 수 있고, 근음을 바꿔
   t.click('root','0');
   assert.deepEqual([t.state().root,t.state().q],[0,'min']);
   assert.equal(t.container.querySelector('.sym').textContent,'Cm');
-  assert.equal(t.svgs(),2,'Cm은 E·A 모양 2개');
+  assert.equal(t.svgs(),3,'Cm 3개');
   t.click('q','maj');
   assert.equal(t.container.querySelector('.sym').textContent,'C');
-  assert.equal(t.svgs(),3,'C: 오픈 + E·A 모양');
+  assert.equal(t.svgs(),5,'C 5개');
 });
 
 test('음 개수: D를 2개로 고르면 오픈 폼에서 이웃한 두 줄 폼 3가지가 먼저 나온다',()=>{
   const t=boot({root:2,q:'maj'});
-  assert.equal(t.svgs(),3,'오픈, E 모양, A 모양');
+  assert.equal(t.svgs(),5,'D 5개');
   t.click('n','2');
-  assert.equal(t.svgs(),3+5+4,'오픈 3가지 + E 모양 5가지 + A 모양 4가지');
+  assert.equal(t.svgs(),17,'D 2줄 조합 17개');
   t.click('n','0');
-  assert.equal(t.svgs(),3);
+  assert.equal(t.svgs(),5);
 });
 
 test('표시 방식: 음이름·도수',()=>{
