@@ -1,13 +1,13 @@
 'use client';
-// 지판 음계 표: 줄(1~6번)×프렛(0~15)의 음이름. 
+// 지판 음계 표: 줄(1~6번)×프렛(0~24)의 음이름.
 // 보기 모드: 지금 고른 코드의 구성음을 표시하고, 음을 누르면 같은 음이 지판 어디에 있는지 모두 밝힌다.
 // edit 모드: 누른 음을 진행의 고른 마디 멜로디에 넣는다(음을 고른 상태면 그 음을 바꾼다).
 import {useState} from 'react';
-import {pcOfNote} from '../lib/fretlogic.js';
+import {pcOfNote,MAX_FRET} from '../lib/fretlogic.js';
 import {MAX_NOTES} from '../lib/settings.js';
 import {useGuide} from './GuideProvider.jsx';
 
-const FRETS=16; // 프렛 0~15
+const FRETS=MAX_FRET+1; // 프렛 0~24
 
 export default function NoteTable({edit=false}){
   const g=useGuide();

@@ -67,7 +67,7 @@ test('코드·지판 페이지는 보기 전용: 진행 버튼·마디 차트가
   assert.deepEqual([...t.container.querySelectorAll('.controls .field>span')].map(x=>x.textContent),['근음','코드','음 개수']);
   for(const k of ['fadd','frep','bar','slot','padd','ptitle','pshare']) assert.equal(t.container.querySelector(`[data-k="${k}"]`),null,k);
   assert.ok(t.container.querySelector('.notetable'),'지판 음계 표');
-  assert.equal(t.container.querySelectorAll('.ngrid button[data-k="nnote"]').length,6*16);
+  assert.equal(t.container.querySelectorAll('.ngrid button[data-k="nnote"]').length,6*25);
   assert.deepEqual([...t.container.querySelectorAll('.tab')].map(x=>x.textContent),['코드·지판','진행']);
 });
 
