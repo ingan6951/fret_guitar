@@ -5,6 +5,7 @@ import {usePathname} from 'next/navigation';
 import {useGuide} from './GuideProvider.jsx';
 import {Chip} from './ui.jsx';
 import AccountBox from './AccountBox.jsx';
+import LoginGate from './LoginGate.jsx';
 
 const PAGES=[['/','코드·지판'],['/progression','진행']];
 const LABELS=[['note','음이름'],['degree','도수']];
@@ -36,6 +37,7 @@ export default function Shell({children}){
         </details>
       </header>
       {children}
+      <LoginGate/>
     </div>
   );
 }

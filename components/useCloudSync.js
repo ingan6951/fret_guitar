@@ -1,5 +1,5 @@
 'use client';
-// 로그인(이메일 링크·코드)과 기기 사이 설정 동기화. GuideProvider가 상태와 함께 쓴다.
+// 로그인(Google)과 기기 사이 설정 동기화. GuideProvider가 상태와 함께 쓴다.
 //  - 로그인하면 서버 값을 먼저 읽고(lib/cloud.js의 decide), 그다음부터 바뀐 내용을 잠깐 모았다가 올린다.
 //  - 탭으로 돌아올 때마다 다시 읽어, 다른 기기에서 바꾼 내용을 가져온다.
 //  - 로그아웃해도 이 기기에 저장된 내용은 그대로 둔다.
@@ -8,11 +8,12 @@ import {sb,supabaseConfigured} from '../lib/supabase.js';
 import {decide,fetchRow,pushRow,readMeta,writeMeta,syncJSON} from '../lib/cloud.js';
 
 export const SYNC_DELAY=1200; // 마지막으로 바꾼 뒤 이만큼(ms) 지나면 올린다
-const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const SKIP_KEY='fretguide.loginSkip'; // 들어올 때 로그인 권하기를 건너뛴 기기
 
 export default function useCloudSync(state,setState,ready){
   const [configured]=useState(supabaseConfigured);
   const [user,setUser]=useState(null);
+  const [checked,setChecked]=useState(false); // 이 기기의 로그인 상태를 확인했나 (그 전에는 로그인 권하기를 띄우지 않는다)
   const [status,setStatus]=useState('idle'); // idle | sync | saved | error
   const stateRef=useRef(state); stateRef.current=state;
   const pulled=useRef(null);  // 서버 값을 읽어 맞춘 사용자 id (그 전에는 올리지 않는다)
@@ -20,12 +21,13 @@ export default function useCloudSync(state,setState,ready){
   const timer=useRef(null);
   const uid=user?user.id:null;
 
-  // 로그인 상태 지켜보기 (메일 링크로 돌아오면 주소의 토큰을 읽어 로그인된다)
+  // 로그인 상태 지켜보기 (Google에서 돌아오면 주소의 토큰을 읽어 로그인된다)
   useEffect(()=>{
     if(!configured) return;
     const auth=sb().auth;
     let alive=true;
-    auth.getSession().then(({data})=>{ if(alive) setUser(data&&data.session?data.session.user:null); }).catch(()=>{});
+    auth.getSession().then(({data})=>{ if(alive) setUser(data&&data.session?data.session.user:null); }).catch(()=>{})
+      .finally(()=>{ if(alive) setChecked(true); });
     const {data}=auth.onAuthStateChange((_e,session)=>{ setUser(session?session.user:null); });
     return ()=>{ alive=false; data.subscription.unsubscribe(); };
   },[configured]);
@@ -78,29 +80,21 @@ export default function useCloudSync(state,setState,ready){
   },[state,uid,push,status]);
 
   // ----- 로그인 -----
-  const sendLink=async email=>{
-    const e=String(email||'').trim();
-    if(!EMAIL_RE.test(e)) return '이메일 주소를 확인해 주세요';
+  // Google 로그인: Google 화면으로 갔다가 지금 페이지로 돌아온다. 시작하지 못하면 안내 문구를 돌려준다.
+  const signInGoogle=async()=>{
     try{
-      const url=new URL(window.location.href); url.search=''; url.hash='';
-      const {error}=await sb().auth.signInWithOtp({email:e,options:{emailRedirectTo:url.toString(),shouldCreateUser:true}});
-      return error?'메일을 보내지 못했어요. 잠시 뒤 다시 해 주세요':'';
-    }catch(err){ return '메일을 보내지 못했어요. 인터넷 연결을 확인해 주세요'; }
-  };
-  const verifyCode=async(email,code)=>{
-    const token=String(code||'').replace(/\s/g,'');
-    if(!/^\d{6,10}$/.test(token)) return '메일에 있는 숫자 코드를 넣어 주세요';
-    try{
-      const {error}=await sb().auth.verifyOtp({email:String(email).trim(),token,type:'email'});
-      return error?'코드가 맞지 않거나 시간이 지났어요':'';
-    }catch(err){ return '확인하지 못했어요. 인터넷 연결을 확인해 주세요'; }
+      const url=new URL(window.location.href); url.hash='';
+      const {error}=await sb().auth.signInWithOAuth({provider:'google',options:{redirectTo:url.toString()}});
+      return error?'Google 로그인을 시작하지 못했어요. 잠시 뒤 다시 해 주세요':'';
+    }catch(err){ return 'Google 로그인을 시작하지 못했어요. 인터넷 연결을 확인해 주세요'; }
   };
   const signOut=async()=>{
     clearTimeout(timer.current);
     pulled.current=null; writeMeta(null);
+    try{ localStorage.setItem(SKIP_KEY,'1'); }catch(e){} // 로그아웃한 뒤 들어올 때 다시 로그인을 권하지 않는다
     try{ await sb().auth.signOut({scope:'local'}); }catch(e){}
     setUser(null); setStatus('idle');
   };
 
-  return {configured,user,email:user?user.email:'',status,sendLink,verifyCode,signOut,retry:pull};
+  return {configured,checked,user,email:user?user.email:'',status,signInGoogle,signOut,retry:pull};
 }

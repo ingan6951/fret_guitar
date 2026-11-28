@@ -41,15 +41,15 @@
 - 한계: 방 id를 아는 사람은 누구나 방장 메시지를 흉내 낼 수 있습니다(공개 채널). 방 id는 추측하기 어려운 10글자입니다.
 
 ## 기기 사이 동기화 (로그인)
-⚙ 보기 설정 안의 `다른 기기와 같이 쓰기`에서 이메일로 로그인하면, 진행 목록과 코드 조건·표시 설정을 다른 기기에서도 그대로 봅니다(Supabase Auth + `user_settings` 테이블).
-- 로그인: 이메일을 넣으면 메일이 옵니다. 메일의 링크를 누르거나, 메일에 있는 숫자 코드를 앱에 넣습니다(메일 앱 안 브라우저에서 링크가 열려 로그인이 엉뚱한 곳에 될 때 코드가 편합니다).
+Google로 로그인하면 진행 목록과 코드 조건·표시 설정을 다른 기기에서도 그대로 봅니다(Supabase Auth + `user_settings` 테이블).
+- 로그인: 처음 들어오면 로그인을 권하는 창(`components/LoginGate.jsx`)이 뜹니다. `Google로 로그인`을 누르면 Google 화면을 거쳐 같은 페이지로 돌아옵니다. `로그인 없이 쓰기`를 고르면 그 기기에서는 다시 묻지 않고(`fretguide.loginSkip`), 나중에 ⚙ 보기 설정의 `다른 기기와 같이 쓰기`에서 로그인합니다. 합주 방 링크(`/room`)로 들어올 때는 묻지 않습니다.
 - 흐름(`components/useCloudSync.js`, 판단은 `lib/cloud.js`의 `decide`): 로그인하면 먼저 서버 값을 읽습니다. 이 기기가 비어 있거나 안 바뀌었으면 서버 것을 받고, 서버에 없으면 이 기기 것을 올립니다. 둘 다 서로 모르는 변경이 있으면 서버 진행 뒤에 이 기기에만 있는 진행을 붙여 둘 다 남깁니다. 그다음부터는 바꾼 뒤 1.2초 지나면 올리고, 탭으로 돌아올 때마다 다시 읽습니다.
 - 지금 고른 진행(`cur`)과 합주 방 관련 값(듣는 기기·지연·방장 기록)은 기기마다 따로입니다. 로그아웃해도 이 기기에 저장된 내용은 남습니다.
 - 서버 준비(한 번):
   1. Supabase 대시보드 → SQL Editor에서 `supabase/user_settings.sql` 실행(테이블 + 자기 줄만 읽고 쓰는 RLS 정책).
-  2. Authentication → Sign In / Providers에서 Email 켜기.
+  2. Google Cloud Console → APIs & Services → Credentials에서 OAuth 클라이언트 ID(웹 애플리케이션)를 만들고, 승인된 리디렉션 URI에 `https://<프로젝트>.supabase.co/auth/v1/callback`을 넣습니다. Supabase → Authentication → Sign In / Providers → Google을 켜고 클라이언트 ID·Secret을 넣습니다.
   3. Authentication → URL Configuration: `Site URL`에 배포 주소, `Redirect URLs`에 `https://배포주소/**`와 `http://localhost:3000/**`.
-  4. (코드로 로그인하려면) Authentication → Emails → `Magic Link` 템플릿에 `{{ .Token }}`을 넣기. 기본 메일 발송은 시간당 몇 통으로 제한되므로, 여러 사람이 쓰면 SMTP를 따로 설정합니다.
+  4. 같은 이메일의 예전(이메일 링크로 가입한) 계정은 Google로 로그인하면 Supabase가 같은 사용자로 연결하므로 저장한 곡이 그대로 이어집니다.
 - 서버 설정(`NEXT_PUBLIC_SUPABASE_*`)이 없으면 로그인 칸이 보이지 않습니다. 테스트는 `tests/shims/supabase.js`의 가짜 auth·테이블로 대신합니다.
 
 ## 진행 공유

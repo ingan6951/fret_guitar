@@ -31,7 +31,7 @@ export function resetBus(){ bus.rooms.clear(); bus.sent=[]; }
 
 // ----- 로그인(auth)과 user_settings 테이블 흉내 -----
 // 서버 행 규칙(RLS)처럼 로그인한 사용자 자기 줄만 읽고 쓴다. 시각은 실제 서버처럼 "+00:00" 꼴로 돌려준다.
-export const authBus={session:null,listeners:new Set(),otps:[],code:'123456'};
+export const authBus={session:null,listeners:new Set(),oauth:[],oauthFail:false};
 export const db={tables:new Map(),fail:false,writes:0};
 const tableOf=n=>{ if(!db.tables.has(n)) db.tables.set(n,new Map()); return db.tables.get(n); };
 const emit=(ev,s)=>authBus.listeners.forEach(cb=>cb(ev,s));
@@ -43,10 +43,10 @@ const me=()=>authBus.session&&authBus.session.user.id;
 const auth={
   getSession:async()=>({data:{session:authBus.session},error:null}),
   onAuthStateChange(cb){ authBus.listeners.add(cb); return {data:{subscription:{unsubscribe:()=>authBus.listeners.delete(cb)}}}; },
-  signInWithOtp:async({email,options})=>{ authBus.otps.push({email,options}); return {data:{},error:null}; },
-  verifyOtp:async({email,token})=>{
-    if(token!==authBus.code) return {data:{},error:{message:'Token has expired or is invalid'}};
-    signIn(email); return {data:{session:authBus.session},error:null};
+  // 실제로는 Google 화면으로 넘어간다. 테스트는 부른 기록만 남기고, 돌아온 것은 signIn()으로 흉내 낸다
+  signInWithOAuth:async({provider,options})=>{
+    if(authBus.oauthFail) return {data:{},error:{message:'provider is not enabled'}};
+    authBus.oauth.push({provider,options}); return {data:{provider,url:'https://accounts.example/'},error:null};
   },
   signOut:async()=>{ authBus.session=null; emit('SIGNED_OUT',null); return {error:null}; }
 };
@@ -66,4 +66,4 @@ function from(table){
     }
   };
 }
-export function resetAuth(){ authBus.session=null; authBus.listeners.clear(); authBus.otps=[]; db.tables.clear(); db.fail=false; db.writes=0; }
+export function resetAuth(){ authBus.session=null; authBus.listeners.clear(); authBus.oauth=[]; authBus.oauthFail=false; db.tables.clear(); db.fail=false; db.writes=0; }
