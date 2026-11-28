@@ -148,11 +148,6 @@ h1,h2,p{margin:0}
 .plist .titlein{flex:1 1 100%}
 .plist .sel{flex:1 1 160px;width:auto}
 .chart{display:grid;gap:8px}
-.bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.bar{position:relative;display:grid;gap:6px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
-.bar.picked{border-color:var(--ivory);box-shadow:0 0 0 1px var(--ivory)}
-.bn{width:30px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--steel);font-size:12px;font-weight:700;padding:0;text-align:left}
-.bar.picked .bn{color:var(--ivory)}
 .slots{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
 .slot{display:grid;place-items:center;align-content:center;gap:1px;min-height:54px;padding:2px 4px;border:1px solid var(--line);border-radius:8px;background:var(--ebony)}
 .slot b{font-size:18px;line-height:1.1}
@@ -181,7 +176,7 @@ h1,h2,p{margin:0}
   .app{padding-top:16px}
   .top h1{font-size:22px}
   .controls{max-width:640px}
-  .bars{grid-template-columns:repeat(4,minmax(0,1fr))}
+
   .selname{flex:1 1 auto}
 }
 @media (prefers-reduced-motion:no-preference){
@@ -189,8 +184,6 @@ h1,h2,p{margin:0}
 }
 .editor>*,.notetable,.panel>*,.finder>*{min-width:0}
 .notetable{display:grid;gap:6px}
-.bar.wide{grid-column:1 / -1}
-@media (min-width:720px){ .bar.wide{grid-column:span 2} }
 
 /* 마디 안 행 이름표(코드 / ♪ 멜로디)와 멜로디 순서 번호 */
 .brow{display:flex;align-items:center;gap:6px;min-width:0}
@@ -200,33 +193,13 @@ h1,h2,p{margin:0}
 .brow.mel{border-top:1px dashed var(--line);padding-top:5px;margin-top:2px}
 .notes{display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:30px}
 .mnote{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:0 9px 0 4px}
-.mnote i,.pnote i{font-style:normal;display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:50%;background:var(--brass);color:var(--ink);font-size:11px;font-weight:800}
+.mnote i{font-style:normal;display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:50%;background:var(--brass);color:var(--ink);font-size:11px;font-weight:800}
 .mnote.on i{background:var(--ink);color:var(--brass)}
 .ord{font-size:9px;color:var(--brass);margin-left:1px}
 .ncell.on .ord{color:var(--ink)}
-.viewseg{margin-left:auto}
 .mel-empty{font-size:11px;color:var(--steel);opacity:.6}
 
 /* 연주용 보기: 크게, 한눈에 */
-.play{display:grid;gap:10px}
-.playbars{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
-.playbar{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;gap:8px;min-width:0}
-.playbar.none{opacity:.55}
-.playbar h3{margin:0;font-size:13px;color:var(--steel);font-weight:700}
-.playbar h3 span{font-family:var(--display);font-weight:800;font-size:24px;color:var(--ivory);margin-right:3px}
-.prow2{display:flex;gap:8px;align-items:flex-start;min-width:0}
-.prow2>.rowtag{padding-top:6px}
-.pchords{flex:1;display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:2px;min-width:0}
-.pchord{flex:0 0 min(78%,250px);margin:0;background:var(--ebony);border:1px solid var(--line);border-radius:10px;padding:6px 8px 2px;display:grid;gap:4px;scroll-snap-align:start}
-.pchord figcaption{display:flex;justify-content:space-between;align-items:center}
-.pchord figcaption b{font-size:22px}
-.pchord svg{display:block;width:100%;height:auto}
-.pnotes{flex:1;list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;min-width:0}
-.pnote{display:grid;grid-template-columns:auto auto;align-items:center;gap:0 8px;padding:6px 12px 6px 8px;background:var(--ebony);border:1px solid var(--wound);border-radius:12px}
-.pnote i{grid-row:span 2;min-width:26px;height:26px;font-size:14px}
-.pnote b{font-size:22px;line-height:1}
-.pnote small{font-size:11.5px;color:var(--steel)}
-@media (min-width:720px){ .playbars{grid-template-columns:repeat(2,minmax(0,1fr))} .pchord{flex-basis:210px} }
 
 /* ===== 메트로놈 줄 (곡의 빠르기·박자) ===== */
 .tempo{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
@@ -249,9 +222,6 @@ h1,h2,p{margin:0}
 .beatdots i.one.on{background:var(--brass)}
 .tempo .count{flex:1 1 100%}
 /* 지금 연주 중인 마디 */
-.bar.now,.playbar.now{border-color:var(--brass);box-shadow:0 0 0 2px var(--brass)}
-.playbar.now{opacity:1}
-.playbar.now h3 span{color:var(--brass)}
 @media (max-width:719px){ .beatdots{margin-left:0;flex:1 1 100%;justify-content:center} }
 
 /* ===== 합주 방 ===== */
@@ -316,3 +286,57 @@ h1,h2,p{margin:0}
 .acctin{min-height:44px;width:100%;box-sizing:border-box;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--ebony);color:var(--ivory);font:inherit;font-size:16px}
 .acctin:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 .acct .chip:disabled{opacity:.55;cursor:default}
+
+/* ----- 탭 악보 (components/TabStaff.jsx): 한 줄 4마디, 위에서부터 1번 줄(e) … 6번 줄(E) ----- */
+/* 줄 간격(--ts)과 코드 이름 칸(--th)으로 6줄 선과 숫자 칸을 같은 높이에 맞춘다 */
+.tab{--ts:16px;--th:22px;display:grid;gap:14px}
+.tabscroll{overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:2px}
+/* 6줄 선은 줄 이름 칸과 마디마다 ::before 로 긋는다 */
+.tabline{display:flex;min-width:100%;height:calc(var(--th) + 6 * var(--ts))}
+.tnames,.tbar,.tgap{position:relative;height:100%}
+.tnames::before,.tbar::before{content:'';position:absolute;left:0;right:0;top:var(--th);height:calc(6 * var(--ts));pointer-events:none;
+  background:linear-gradient(to bottom,transparent calc(var(--ts)/2 - .5px),rgba(200,204,212,.55) calc(var(--ts)/2 - .5px),rgba(200,204,212,.55) calc(var(--ts)/2 + .5px),transparent calc(var(--ts)/2 + .5px)) 0 0/100% var(--ts) repeat-y}
+.tnames{flex:0 0 22px;display:grid;grid-template-rows:repeat(6,var(--ts));padding-top:var(--th);font-size:10.5px;font-weight:700;color:var(--steel);text-align:left}
+.tnames span{line-height:var(--ts)}
+.tnames::after{content:'';position:absolute;right:0;top:calc(var(--th) + var(--ts)/2);height:calc(5 * var(--ts));border-right:2px solid var(--string)}
+.tgap{flex:2 1 0}
+.tbar{flex:2 1 0;display:block;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--ivory);text-align:left}
+.tbar::after{content:'';position:absolute;right:0;top:calc(var(--th) + var(--ts)/2);height:calc(5 * var(--ts));border-right:1px solid var(--string)}
+.tbar:hover{background:rgba(239,230,210,.05)}
+.tbar:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+.tbar.picked{background:rgba(239,230,210,.09);box-shadow:inset 0 0 0 1px var(--ivory)}
+.tbar.now{background:rgba(233,162,59,.14);box-shadow:inset 0 0 0 2px var(--brass)}
+.tnum{position:absolute;left:4px;top:3px;font-size:10.5px;font-weight:700;color:var(--steel)}
+.tbar.now .tnum{color:var(--brass)}
+.tcols{position:relative;z-index:1;display:flex;justify-content:space-around;gap:4px;height:100%}
+.tcol{display:grid;grid-template-rows:var(--th) repeat(6,var(--ts));justify-items:center;min-width:26px}
+.tchord{align-self:end;padding-bottom:2px;font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--ivory)}
+.tcell{display:grid;place-items:center;line-height:1}
+/* 숫자 뒤의 선을 가려 탭 악보처럼 보이게 */
+.tcell i{font-style:normal;font-family:var(--display);font-size:13px;font-weight:800;padding:0 2px;background:var(--ebony);border-radius:3px;min-width:12px;text-align:center}
+.tcol.n .tcell i{color:var(--brass)}
+.tbar.picked .tcell i{background:#1f1f1e}
+.tbar.now .tcell i{background:#2a2218}
+.tplus{position:absolute;inset:var(--th) 0 0;display:grid;place-items:center;font-size:18px;color:var(--steel);opacity:.45}
+@media (min-width:720px){ .tab{--ts:18px} .tcell i{font-size:14px} .tchord{font-size:13.5px} }
+
+/* ----- 마디 창 (components/BarSheet.jsx): 좁은 화면은 아래에서 올라오는 시트, 넓은 화면은 가운데 창 ----- */
+.sheetwrap{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6)}
+.sheet{width:100%;max-height:92vh;display:flex;flex-direction:column;background:var(--ebony);border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.6);outline:none}
+.sheethead{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.sheethead h2{margin:0;flex:1;text-align:center;font-size:15px;color:var(--steel);font-weight:700}
+.sheethead h2 span{font-family:var(--display);font-size:22px;font-weight:800;color:var(--ivory);margin-right:3px}
+.sheethead .chip{min-width:44px;padding:4px 10px}
+.sheethead .close{margin-left:4px}
+.sheethead .chip:disabled{opacity:.35}
+.sheetbody{overflow-y:auto;overscroll-behavior:contain;display:grid;gap:10px;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
+.baritems{display:grid;gap:6px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.sheet .seltool{position:static;margin:0;padding:0;background:none}
+@media (min-width:720px){
+  .sheetwrap{align-items:center;padding:24px}
+  .sheet{max-width:760px;max-height:88vh;border-bottom:1px solid var(--line);border-radius:16px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .sheet{animation:sheetup .18s ease-out}
+  @keyframes sheetup{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+}
