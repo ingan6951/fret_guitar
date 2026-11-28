@@ -213,3 +213,27 @@ console.log('모든 검사 통과');
   A.equal(Y.leadFromTaps([S+50,...taps([100,100,100,100,100,100,100,100])],S,P).ms,100,'0번 박(시작 전) 탭은 무시');
   console.log('이어폰 지연 탭 측정 검사 통과');
 }
+
+// 기기 사이 동기화: 서버 줄·이 기기 상태·마지막으로 맞춘 기록을 보고 할 일을 정한다
+{
+  const Cl=await import('../lib/cloud.js');
+  const {sanitize}=await import('../lib/settings.js');
+  const am={root:9,q:'min',frets:[null,0,2,2,1,0]};
+  const song=(title,c)=>({title,bars:[{chords:c?[c]:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]}],bpm:90,beats:4});
+  const blank=sanitize(null),mine=sanitize({lists:[song('내 곡',am)]});
+  const row=(lists,at='2026-01-01T00:00:00+00:00')=>({data:{lists},updated_at:at});
+  const metaOf=(s,at='2026-01-01T00:00:00.000Z')=>({uid:'u',at,synced:Cl.syncJSON(s)});
+  A.equal(Cl.decide(mine,null,null).kind,'push','서버에 아직 없으면 올린다');
+  A.equal(Cl.decide(blank,row([song('A',am)]),null).kind,'apply','빈 기기는 서버 것을 받는다');
+  const synced=sanitize({lists:[song('A',am)]});
+  A.equal(Cl.decide(synced,row([song('A',am)]),metaOf(synced)).kind,'none','시각 표기(Z/+00:00)가 달라도 같은 시각이면 그대로');
+  const edited=sanitize({lists:[song('A',am),song('B')]});
+  A.equal(Cl.decide(edited,row([song('A',am)]),metaOf(synced)).kind,'push','이 기기만 바꿨으면 올린다');
+  A.equal(Cl.decide(synced,row([song('C',am)],'2026-01-02T00:00:00+00:00'),metaOf(synced)).kind,'apply','다른 기기만 바꿨으면 받는다');
+  const both=Cl.decide(sanitize({lists:[song('A',am),song('폰',am)]}),row([song('A',am),song('PC',am)],'2026-01-02T00:00:00+00:00'),metaOf(synced));
+  A.equal(both.kind,'merge');
+  A.deepEqual(both.state.lists.map(l=>l.title),['A','PC','폰'],'둘 다 바꿨으면 서버 진행 뒤에 이 기기 진행을 붙인다');
+  A.deepEqual(Cl.merge(mine,{lists:[song('진행 1')]}).lists.map(l=>l.title),['내 곡'],'서버가 빈 진행뿐이면 이 기기 진행만');
+  A.equal('cur' in Cl.syncPart(mine),false,'고른 진행 번호는 올리지 않는다');
+  console.log('기기 동기화 판단 검사 통과');
+}

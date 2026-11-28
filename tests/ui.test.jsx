@@ -9,7 +9,9 @@ import Shell from '../components/Shell.jsx';
 import ExplorePage from '../components/ExplorePage.jsx';
 import ProgressionPage from '../components/ProgressionPage.jsx';
 import RoomPage from '../components/RoomPage.jsx';
-import {makeChannel,resetBus,bus} from './shims/supabase.js';
+import {makeChannel,resetBus,bus,authBus,db,signIn,serverRow,readRow,resetAuth} from './shims/supabase.js';
+import {SYNC_DELAY} from '../components/useCloudSync.js';
+import {META_KEY} from '../lib/cloud.js';
 import {epochNow} from '../lib/sync.js';
 import {CHORDS} from '../lib/chords.js';
 import {NOTE_SHARP,QUALITIES} from '../lib/fretlogic.js';
@@ -737,5 +739,110 @@ test('듣는 기기 맞추기: 블루투스는 탭으로 지연을 재서 그 �
     fireEvent.click(q('button[data-k="outreset"]'));
     assert.ok(q('.setup'));
     assert.equal(localStorage.getItem('fretguide.output'),null);
+  });
+});
+
+// ----- 로그인·기기 사이 동기화 (Supabase 대신 tests/shims/supabase.js 의 auth·테이블) -----
+const withCloud=async(fn)=>{
+  Object.assign(process.env,ROOM_ENV); resetAuth();
+  try{ await fn(); }finally{
+    for(const k of Object.keys(ROOM_ENV)) delete process.env[k];
+    resetAuth(); window.history.pushState(null,'','/');
+  }
+};
+const acct=t=>t.container.querySelector('.acct');
+const typeIn=(t,name,v)=>fireEvent.change(t.container.querySelector(`.acct input[name="${name}"]`),{target:{value:v}});
+const submit=t=>fireEvent.submit(t.container.querySelector('.acct form'));
+const song=(title,chord)=>({title,bars:[{chords:chord?[chord]:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]}],bpm:90,beats:4});
+const AM={root:9,q:'min',frets:[null,0,2,2,1,0]},C={root:0,q:'maj',frets:[null,3,2,0,1,0]};
+const titles=t=>t.state().lists.map(l=>l.title);
+
+test('로그인 칸: 서버 설정이 없으면 보이지 않는다',()=>{
+  const t=boot();
+  assert.equal(acct(t),null);
+});
+
+test('로그인: 메일을 받아 코드로 들어오면, 이 기기의 진행을 서버에 올린다',async()=>{
+  await withCloud(async()=>{
+    const t=boot({lists:[song('내 곡',AM)],cur:0});
+    await wait(10);
+    assert.match(acct(t).textContent,/다른 기기와 같이 쓰기/);
+    typeIn(t,'email','nope'); submit(t); await wait(10);
+    assert.match(acct(t).textContent,/이메일 주소를 확인해/);
+    assert.equal(authBus.otps.length,0);
+    typeIn(t,'email','me@example.com'); submit(t); await wait(10);
+    assert.equal(authBus.otps[0].email,'me@example.com');
+    assert.equal(authBus.otps[0].options.emailRedirectTo,'http://localhost/');
+    assert.match(acct(t).textContent,/me@example.com로 메일을 보냈어요/);
+    typeIn(t,'code','000000'); submit(t); await wait(10);
+    assert.match(acct(t).textContent,/코드가 맞지 않거나/);
+    typeIn(t,'code','123 456'); submit(t); await wait(30);
+    assert.match(acct(t).textContent,/me@example.com/);
+    assert.match(acct(t).textContent,/동기화됨/);
+    const row=readRow('user_settings','user-me@example.com');
+    assert.deepEqual(row.data.lists.map(l=>l.title),['내 곡']);
+    assert.equal('cur' in row.data,false,'지금 고른 진행은 기기마다 따로');
+  });
+});
+
+test('새 기기: 로그인하면 서버의 진행을 받아 오고, 고친 내용은 잠시 뒤 서버에 올라간다',async()=>{
+  await withCloud(async()=>{
+    const uid=signIn('me@example.com');
+    serverRow('user_settings',uid,{root:0,q:'maj',n:0,label:'degree',flat:true,lists:[song('A',AM),song('B',C)]},'2026-01-01T00:00:00.000Z');
+    const t=boot(null,'prog'); await wait(30);
+    assert.deepEqual(titles(t),['A','B']);
+    assert.equal(t.state().label,'degree');
+    assert.equal(db.writes,0,'받기만 했으면 다시 올리지 않는다');
+    fireEvent.click(t.container.querySelector('button[data-k="pnew"]'));
+    await wait(SYNC_DELAY/2);
+    assert.equal(db.writes,0,'바로 올리지 않고 모았다가');
+    await wait(SYNC_DELAY);
+    assert.equal(db.writes,1);
+    assert.deepEqual(readRow('user_settings',uid).data.lists.map(l=>l.title),['A','B','진행 3']);
+  });
+});
+
+test('두 기기 모두 내용이 있으면: 서버 진행 뒤에 이 기기에만 있는 진행을 붙인다',async()=>{
+  await withCloud(async()=>{
+    const uid=signIn('me@example.com');
+    serverRow('user_settings',uid,{root:9,q:'min',n:0,label:'note',flat:false,lists:[song('A',AM)]});
+    const t=boot({lists:[song('A',AM),song('폰에서 만든 곡',C)],cur:1}); await wait(30);
+    assert.deepEqual(titles(t),['A','폰에서 만든 곡']);
+    assert.deepEqual(readRow('user_settings',uid).data.lists.map(l=>l.title),['A','폰에서 만든 곡']);
+  });
+});
+
+test('다른 기기에서 바꾼 내용은 탭으로 돌아올 때 가져오고, 서버에 실패하면 다시 시도할 수 있다',async()=>{
+  await withCloud(async()=>{
+    const uid=signIn('me@example.com');
+    serverRow('user_settings',uid,{lists:[song('A',AM)]},'2026-01-01T00:00:00.000Z');
+    const t=boot(); await wait(30);
+    assert.deepEqual(titles(t),['A']);
+    serverRow('user_settings',uid,{lists:[song('A',AM),song('PC에서 추가',C)]},'2026-01-02T00:00:00.000Z');
+    await act(async()=>{ document.dispatchEvent(new window.Event('visibilitychange')); });
+    await wait(30);
+    assert.deepEqual(titles(t),['A','PC에서 추가']);
+    assert.equal(db.writes,0);
+    db.fail=true;
+    await act(async()=>{ document.dispatchEvent(new window.Event('visibilitychange')); });
+    await wait(30);
+    assert.match(acct(t).textContent,/동기화하지 못했어요/);
+    db.fail=false;
+    fireEvent.click(t.container.querySelector('button[data-k="sretry"]')); await wait(30);
+    assert.match(acct(t).textContent,/동기화됨/);
+  });
+});
+
+test('로그아웃: 이 기기의 내용은 그대로 두고 동기화 기록만 지운다',async()=>{
+  await withCloud(async()=>{
+    const uid=signIn('me@example.com');
+    serverRow('user_settings',uid,{lists:[song('A',AM)]});
+    const t=boot(); await wait(30);
+    assert.ok(localStorage.getItem(META_KEY));
+    fireEvent.click(t.container.querySelector('button[data-k="logout"]')); await wait(10);
+    assert.equal(authBus.session,null);
+    assert.equal(localStorage.getItem(META_KEY),null);
+    assert.deepEqual(titles(t),['A']);
+    assert.match(acct(t).textContent,/다른 기기와 같이 쓰기/);
   });
 });

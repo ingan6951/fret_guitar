@@ -1,7 +1,8 @@
 'use client';
-// 모든 페이지가 같이 쓰는 상태: 코드 조건, 진행 목록, 진행에서 고른 칸. 설정은 브라우저에 저장한다.
+// 모든 페이지가 같이 쓰는 상태: 코드 조건, 진행 목록, 진행에서 고른 칸. 설정은 브라우저에 저장하고, 로그인하면 서버에도 맞춰 둔다.
 import {createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {NOTE_SHARP,NOTE_FLAT,QUALITIES,hasChord,voicingFromFrets,fretsOf,pcOfNote,handPos,moveCost} from '../lib/fretlogic.js';
+import useCloudSync from './useCloudSync.js';
 import {DEFAULT,MIN_BARS,MAX_PROG,MAX_LISTS,MAX_NOTES,MAX_CHORDS,newBar,newList,cleanTitle,cleanBpm,cleanBeats,loadState,saveState,encodeBars,decodeBars,barIsEmpty} from '../lib/settings.js';
 
 const Ctx=createContext(null);
@@ -40,6 +41,8 @@ export default function GuideProvider({children}){
     setReady(true);
   },[]);
   useEffect(()=>{ if(ready) saveState(state); },[state,ready]);
+  // 로그인하면 다른 기기와 같은 내용을 쓴다 (서버 설정이 없으면 아무것도 안 한다)
+  const cloud=useCloudSync(state,setState,ready);
 
   const pick=(k,v)=>setState(s=>{
     switch(k){
@@ -165,6 +168,6 @@ export default function GuideProvider({children}){
   const value={state,pick,root,qid,n,label,flat,lists,cur,bars,bpm,beats,nm,q,sym:nm[root]+q.suffix,chordName,noteName,noteWhere,
     sel,selBar,selChord,selNote,chordSlots,filledSlots,moved,gap,prev,next,noteTotal,moveCost,
     selectBar,selectChord,selectNote,setKind,addBar,clearBar,clearAll,putForm,putNote,moveNote,delSel,
-    switchList,newProg,deleteProg,confirmDel,shareProg,shareNote,shareUrl};
+    switchList,newProg,deleteProg,confirmDel,shareProg,shareNote,shareUrl,cloud};
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
