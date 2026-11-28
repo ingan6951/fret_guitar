@@ -280,11 +280,7 @@ h1,h2,p{margin:0}
 .acctstat{margin:0;font-size:13px;color:var(--steel);min-height:1em}
 .acctstat.bad{color:var(--danger)}
 .accthelp{margin:0;font-size:12px;line-height:1.45;color:var(--steel)}
-.accthelp b{color:var(--ivory);overflow-wrap:anywhere}
-.acctform{display:grid;gap:6px}
 .acctrow{display:flex;gap:6px;flex-wrap:wrap}
-.acctin{min-height:44px;width:100%;box-sizing:border-box;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--ebony);color:var(--ivory);font:inherit;font-size:16px}
-.acctin:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
 .acct .chip:disabled{opacity:.55;cursor:default}
 
 /* ----- 탭 악보 (components/TabStaff.jsx): 한 줄 4마디, 위에서부터 1번 줄(e) … 6번 줄(E) ----- */
@@ -340,3 +336,13 @@ h1,h2,p{margin:0}
   .sheet{animation:sheetup .18s ease-out}
   @keyframes sheetup{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
 }
+
+/* 들어올 때 로그인 권하기 (components/LoginGate.jsx) */
+.gate{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:20px;background:rgba(13,14,16,.92);backdrop-filter:blur(4px)}
+.gatebox{width:min(360px,100%);display:grid;gap:12px;padding:24px 20px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.6);text-align:center}
+.gatebox h2{margin:0;font-family:var(--display);font-weight:800;font-size:24px}
+.gatelead{margin:0 0 4px;font-size:14px;line-height:1.5;color:var(--ivory)}
+.chip.google{background:var(--ivory);border-color:var(--ivory);color:var(--ink)}
+.chip.google.big{min-height:50px;font-size:15px}
+.chip.google:disabled{opacity:.6;cursor:default}
+.gateskip{background:transparent}

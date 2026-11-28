@@ -739,8 +739,9 @@ const withCloud=async(fn)=>{
   }
 };
 const acct=t=>t.container.querySelector('.acct');
-const typeIn=(t,name,v)=>fireEvent.change(t.container.querySelector(`.acct input[name="${name}"]`),{target:{value:v}});
-const submit=t=>fireEvent.submit(t.container.querySelector('.acct form'));
+const gate=t=>t.container.querySelector('.gate');
+// Google에서 돌아온 것처럼: 로그인된 상태가 되고 로그인 상태 변화가 앱에 전해진다
+const backFromGoogle=async(email='me@example.com')=>{ await act(async()=>{ signIn(email); }); await wait(30); };
 const song=(title,chord)=>({title,bars:[{chords:chord?[chord]:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]},{chords:[],notes:[]}],bpm:90,beats:4});
 const AM={root:9,q:'min',frets:[null,0,2,2,1,0]},C={root:0,q:'maj',frets:[null,3,2,0,1,0]};
 const titles=t=>t.state().lists.map(l=>l.title);
@@ -750,21 +751,54 @@ test('로그인 칸: 서버 설정이 없으면 보이지 않는다',()=>{
   assert.equal(acct(t),null);
 });
 
-test('로그인: 메일을 받아 코드로 들어오면, 이 기기의 진행을 서버에 올린다',async()=>{
+test('들어올 때 로그인 권하기: Google로 로그인하거나 건너뛸 수 있고, 건너뛰면 이 기기에서는 다시 묻지 않는다',async()=>{
+  // 서버 설정이 없으면 띄우지 않는다
+  let t=boot(); await wait(10);
+  assert.equal(gate(t),null);
+  cleanup();
   await withCloud(async()=>{
-    const t=boot({lists:[song('내 곡',AM)],cur:0});
+    t=boot(); await wait(10);
+    assert.ok(gate(t),'처음 들어오면 로그인을 권한다');
+    assert.equal(gate(t).getAttribute('role'),'dialog');
+    assert.match(gate(t).textContent,/로그인 없이 쓰기/);
+    t.click('skiplogin','');
+    assert.equal(gate(t),null);
+    assert.ok(acct(t),'건너뛰어도 ⚙ 보기 설정에서 로그인할 수 있다');
+    cleanup();
+    t=boot(); await wait(10);
+    assert.equal(gate(t),null,'건너뛴 기기에서는 다시 묻지 않는다');
+    cleanup(); localStorage.clear();
+    // 합주 방 링크로 들어오면 묻지 않는다
+    window.history.pushState(null,'','/room/?id=abcdefghij');
+    t=boot(); await wait(10);
+    assert.equal(gate(t),null);
+    cleanup(); window.history.pushState(null,'','/');
+    // Google 로그인을 시작하지 못하면 안내가 나온다
+    authBus.oauthFail=true;
+    t=boot(); await wait(10);
+    fireEvent.click(gate(t).querySelector('button[data-k="google"]')); await wait(10);
+    assert.match(gate(t).textContent,/Google 로그인을 시작하지 못했어요/);
+    cleanup();
+    // Google에서 실패하고 돌아오면(주소에 error_description) 그 이유를 보여 준다
+    authBus.oauthFail=false;
+    window.history.pushState(null,'','/?error=access_denied&error_description=Access+denied');
+    t=boot(); await wait(10);
+    assert.match(gate(t).textContent,/로그인하지 못했어요: Access denied/);
+  });
+});
+
+test('Google 로그인: 지금 페이지로 돌아오게 Google로 보내고, 돌아오면 이 기기의 진행을 서버에 올린다',async()=>{
+  await withCloud(async()=>{
+    window.history.pushState(null,'','/progression/');
+    const t=boot({lists:[song('내 곡',AM)],cur:0},'prog');
     await wait(10);
-    assert.match(acct(t).textContent,/다른 기기와 같이 쓰기/);
-    typeIn(t,'email','nope'); submit(t); await wait(10);
-    assert.match(acct(t).textContent,/이메일 주소를 확인해/);
-    assert.equal(authBus.otps.length,0);
-    typeIn(t,'email','me@example.com'); submit(t); await wait(10);
-    assert.equal(authBus.otps[0].email,'me@example.com');
-    assert.equal(authBus.otps[0].options.emailRedirectTo,'http://localhost/');
-    assert.match(acct(t).textContent,/me@example.com로 메일을 보냈어요/);
-    typeIn(t,'code','000000'); submit(t); await wait(10);
-    assert.match(acct(t).textContent,/코드가 맞지 않거나/);
-    typeIn(t,'code','123 456'); submit(t); await wait(30);
+    fireEvent.click(gate(t).querySelector('button[data-k="google"]')); await wait(10);
+    assert.equal(authBus.oauth.length,1);
+    assert.equal(authBus.oauth[0].provider,'google');
+    assert.equal(authBus.oauth[0].options.redirectTo,'http://localhost/progression/');
+    assert.match(gate(t).textContent,/Google로 이동 중/);
+    await backFromGoogle();
+    assert.equal(gate(t),null,'로그인하면 닫힌다');
     assert.match(acct(t).textContent,/me@example.com/);
     assert.match(acct(t).textContent,/동기화됨/);
     const row=readRow('user_settings','user-me@example.com');
