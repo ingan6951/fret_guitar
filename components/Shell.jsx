@@ -1,9 +1,10 @@
 'use client';
-// 모든 페이지 공통 머리말: 제목, 페이지 이동 탭, 표시 설정 (한 줄)
+// 모든 페이지 공통 머리말: 제목, 페이지 이동 탭, 표시 설정·로그인 (한 줄)
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useGuide} from './GuideProvider.jsx';
 import {Chip} from './ui.jsx';
+import AccountBox from './AccountBox.jsx';
 
 const PAGES=[['/','코드·지판'],['/progression','진행']];
 const LABELS=[['note','음이름'],['degree','도수']];
@@ -30,6 +31,7 @@ export default function Shell({children}){
               <Chip k="acc" v="sharp" on={!g.flat} onPick={g.pick} aria-label="샤프 표기">♯</Chip>
               <Chip k="acc" v="flat" on={g.flat} onPick={g.pick} aria-label="플랫 표기">♭</Chip>
             </div>
+            <AccountBox/>
           </div>
         </details>
       </header>

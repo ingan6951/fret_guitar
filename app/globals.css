@@ -302,3 +302,17 @@ h1,h2,p{margin:0}
 .setup .tapcal{min-height:160px;font-size:17px}
 .setup .calrow{flex-direction:column}
 .setup .calrow .chip{align-self:center}
+
+/* 보기 설정 안의 로그인·동기화 칸 */
+.acct{display:grid;gap:6px;width:min(280px,calc(100vw - 48px));padding-top:8px;border-top:1px solid var(--line)}
+.accth{margin:0;font-size:13px;font-weight:700;color:var(--steel)}
+.acctwho{margin:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}
+.acctstat{margin:0;font-size:13px;color:var(--steel);min-height:1em}
+.acctstat.bad{color:var(--danger)}
+.accthelp{margin:0;font-size:12px;line-height:1.45;color:var(--steel)}
+.accthelp b{color:var(--ivory);overflow-wrap:anywhere}
+.acctform{display:grid;gap:6px}
+.acctrow{display:flex;gap:6px;flex-wrap:wrap}
+.acctin{min-height:44px;width:100%;box-sizing:border-box;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--ebony);color:var(--ivory);font:inherit;font-size:16px}
+.acctin:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+.acct .chip:disabled{opacity:.55;cursor:default}
